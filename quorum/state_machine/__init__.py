@@ -1,0 +1,3 @@
+"""
+Quorum state machine package.
+"""

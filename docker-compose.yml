@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  node1:
+    build: .
+    container_name: quorum-node-1
+    environment:
+      - NODE_ID=node1
+      - LISTEN_ADDR=0.0.0.0:50051
+      - ADVERTISED_ADDR=node1:50051
+      - PEERS=node2=node2:50051,node3=node3:50051,node4=node4:50051,node5=node5:50051
+      - DATA_DIR=/data
+    ports:
+      - "50051:50051"
+    volumes:
+      - node1_data:/data
+    networks:
+      - quorum_net
+
+  node2:
+    build: .
+    container_name: quorum-node-2
+    environment:
+      - NODE_ID=node2
+      - LISTEN_ADDR=0.0.0.0:50051
+      - ADVERTISED_ADDR=node2:50051
+      - PEERS=node1=node1:50051,node3=node3:50051,node4=node4:50051,node5=node5:50051
+      - DATA_DIR=/data
+    ports:
+      - "50052:50051"
+    volumes:
+      - node2_data:/data
+    networks:
+      - quorum_net
+
+  node3:
+    build: .
+    container_name: quorum-node-3
+    environment:
+      - NODE_ID=node3
+      - LISTEN_ADDR=0.0.0.0:50051
+      - ADVERTISED_ADDR=node3:50051
+      - PEERS=node1=node1:50051,node2=node2:50051,node4=node4:50051,node5=node5:50051
+      - DATA_DIR=/data
+    ports:
+      - "50053:50051"
+    volumes:
+      - node3_data:/data
+    networks:
+      - quorum_net
+
+  node4:
+    build: .
+    container_name: quorum-node-4
+    environment:
+      - NODE_ID=node4
+      - LISTEN_ADDR=0.0.0.0:50051
+      - ADVERTISED_ADDR=node4:50051
+      - PEERS=node1=node1:50051,node2=node2:50051,node3=node3:50051,node5=node5:50051
+      - DATA_DIR=/data
+    ports:
+      - "50054:50051"
+    volumes:
+      - node4_data:/data
+    networks:
+      - quorum_net
+
+  node5:
+    build: .
+    container_name: quorum-node-5
+    environment:
+      - NODE_ID=node5
+      - LISTEN_ADDR=0.0.0.0:50051
+      - ADVERTISED_ADDR=node5:50051
+      - PEERS=node1=node1:50051,node2=node2:50051,node3=node3:50051,node4=node4:50051
+      - DATA_DIR=/data
+    ports:
+      - "50055:50051"
+    volumes:
+      - node5_data:/data
+    networks:
+      - quorum_net
+
+volumes:
+  node1_data:
+  node2_data:
+  node3_data:
+  node4_data:
+  node5_data:
+
+networks:
+  quorum_net:
+    driver: bridge

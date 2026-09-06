@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package quorum.api;
+
+service QuorumService {
+  rpc AcquireLock (AcquireLockRequest) returns (AcquireLockResponse);
+  rpc RenewLock (RenewLockRequest) returns (RenewLockResponse);
+  rpc ReleaseLock (ReleaseLockRequest) returns (ReleaseLockResponse);
+  rpc GetLock (GetLockRequest) returns (GetLockResponse);
+  rpc WatchLeader (WatchLeaderRequest) returns (stream LeaderNotification);
+}
+
+enum LockStatus {
+  LOCK_ACQUIRED = 0;
+  LOCK_BUSY = 1;
+  LOCK_NOT_LEADER = 2;
+  LOCK_INVALID_TOKEN = 3;
+  LOCK_EXPIRED = 4;
+  LOCK_ERROR = 5;
+}
+
+message AcquireLockRequest {
+  string key = 1;
+  string client_id = 2;
+  int64 ttl_ms = 3;
+}
+
+message AcquireLockResponse {
+  LockStatus status = 1;
+  int64 fence_token = 2;
+  int64 expires_at_ms = 3;
+  string leader_id = 4;
+  string leader_address = 5;
+  string message = 6;
+}
+
+message RenewLockRequest {
+  string key = 1;
+  string client_id = 2;
+  int64 fence_token = 3;
+  int64 ttl_ms = 4;
+}
+
+message RenewLockResponse {
+  LockStatus status = 1;
+  int64 fence_token = 2;
+  int64 expires_at_ms = 3;
+  string leader_id = 4;
+  string leader_address = 5;
+  string message = 6;
+}
+
+message ReleaseLockRequest {
+  string key = 1;
+  string client_id = 2;
+  int64 fence_token = 3;
+}
+
+message ReleaseLockResponse {
+  LockStatus status = 1;
+  string leader_id = 2;
+  string leader_address = 3;
+  string message = 4;
+}
+
+message GetLockRequest {
+  string key = 1;
+}
+
+message GetLockResponse {
+  bool is_locked = 1;
+  string owner = 2;
+  int64 fence_token = 3;
+  int64 remaining_ttl_ms = 4;
+  string leader_id = 5;
+  string leader_address = 6;
+}
+
+message WatchLeaderRequest {
+  string client_id = 1;
+}
+
+message LeaderNotification {
+  string leader_id = 1;
+  int64 term = 2;
+  string leader_address = 3;
+  bool is_leader = 4;
+}
