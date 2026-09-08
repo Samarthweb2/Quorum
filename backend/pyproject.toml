@@ -28,9 +28,9 @@ gateway = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["backend", "."]
+pythonpath = ["."]
 asyncio_mode = "auto"
-testpaths = ["backend/tests", "tests"]
+testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

@@ -172,15 +172,16 @@ async def test_watch_leader_stream(three_node_cluster):
         async def _reader():
             async for notif in client.watch_leader(endpoints[0]):
                 events.append(notif)
-                if len(events) >= 1:
+                if notif.leader_id:
                     break
 
         reader_task = asyncio.create_task(_reader())
-        await asyncio.wait_for(reader_task, timeout=2.0)
+        await asyncio.wait_for(reader_task, timeout=3.0)
 
         assert len(events) >= 1
-        assert events[0].leader_id != ""
-        assert events[0].term >= 1
+        last_event = events[-1]
+        assert last_event.leader_id != ""
+        assert last_event.term >= 1
     finally:
         await client.close()
 

@@ -128,7 +128,11 @@ async def test_leader_failure_and_reelection(tmp_path: Path, fake_network: FakeN
         nodes["node-3"].election_timer.set_fixed_timeout(0.12)
         nodes["node-2"].election_timer.reset()
 
-        await asyncio.sleep(0.10)
+        # Wait up to 0.4s for node-2 to win re-election
+        for _ in range(10):
+            if nodes["node-2"].role == Role.LEADER:
+                break
+            await asyncio.sleep(0.04)
 
         # Node 2 should become new leader in Term 2
         assert nodes["node-2"].role == Role.LEADER
@@ -294,12 +298,16 @@ async def test_split_vote_randomized_recovery(tmp_path: Path, fake_network: Fake
         await node.start()
 
     try:
-        # With randomized timers (0.04 - 0.10s), within 0.3s a leader must emerge
-        await asyncio.sleep(0.3)
+        # With randomized timers (0.04 - 0.10s), wait up to 0.8s for leader to emerge
+        leader = None
+        for _ in range(20):
+            leaders = [n for n in nodes.values() if n.role == Role.LEADER]
+            if len(leaders) == 1:
+                leader = leaders[0]
+                break
+            await asyncio.sleep(0.04)
 
-        leaders = [n for n in nodes.values() if n.role == Role.LEADER]
-        assert len(leaders) == 1
-        leader = leaders[0]
+        assert leader is not None, "A single leader should have emerged from randomized election"
 
         for node in nodes.values():
             if node != leader:

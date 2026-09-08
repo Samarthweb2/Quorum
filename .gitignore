@@ -3,9 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
-dist/
 build/
 .eggs/
+
+# Frontend dependencies & build cache
+node_modules/
+.npm/
+.vite/
+*.local
 
 # Virtual environments
 .venv/

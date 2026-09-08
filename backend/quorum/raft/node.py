@@ -272,14 +272,19 @@ class RaftNode:
             self.state_storage.save(self.current_term, self.voted_for)
 
         self.role = Role.FOLLOWER
+        old_leader = self.leader_id
         if new_leader:
             self.leader_id = new_leader
+        elif term_changed:
+            self.leader_id = None
 
         self.heartbeat_timer.stop()
         self.election_timer.reset()
 
-        if old_role != Role.FOLLOWER:
-            logger.info(f"[{self.node_id}] Stepped down to FOLLOWER in Term {self.current_term} (leader={self.leader_id})")
+        leader_changed = (old_leader != self.leader_id)
+        if old_role != Role.FOLLOWER or term_changed or leader_changed:
+            if old_role != Role.FOLLOWER:
+                logger.info(f"[{self.node_id}] Stepped down to FOLLOWER in Term {self.current_term} (leader={self.leader_id})")
             # Cancel any pending client proposals on step-down
             for fut in self._commit_waiters.values():
                 if not fut.done():
@@ -436,8 +441,11 @@ class RaftNode:
             if args.term > self.current_term or self.role == Role.CANDIDATE:
                 await self._step_down(args.term, new_leader=args.leader_id)
             else:
+                old_leader = self.leader_id
                 self.leader_id = args.leader_id
                 self.election_timer.reset()
+                if old_leader != self.leader_id and self.on_leadership_change:
+                    self.on_leadership_change(self.role, self.leader_id, self.current_term)
 
             # 2. Reply false if log doesn't contain an entry at prevLogIndex matching prevLogTerm (§5.3)
             if args.prev_log_index > 0:

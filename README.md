@@ -82,27 +82,51 @@ When a client acquires a lock with Quorum, it receives a **strictly monotonicall
 
 ---
 
+## Project Structure
+
+```
+Quorum/
+├── frontend/             # React + Vite Dark-Theme Web Dashboard
+│   ├── src/
+│   │   ├── components/   # Consensus Topology, Lock Studio, WAL Inspector, Chaos Sandbox
+│   │   ├── App.jsx       # Main state manager & WebSocket event handler
+│   │   └── index.css     # Glassmorphism design tokens & glowing animations
+│   └── package.json
+├── api/                  # Public REST & WebSocket Gateway entrypoint
+├── quorum/               # Core Raft Consensus & Distributed Lock Server (Backend)
+│   ├── raft/             # Consensus Engine (node.py, storage.py, timer.py, transport.py)
+│   ├── state_machine/    # Deterministic Lock State Machine & Monotonic Fencing Tokens
+│   ├── server/           # gRPC Raft and Client Services
+│   ├── client/           # Client SDK (context manager, auto-renewal, failover)
+│   └── gateway/          # FastAPI & WebSocket streaming cluster controller
+├── database/             # Storage and persistence abstraction layer
+├── proto/                # Protocol Buffers definitions (quorum.proto, raft.proto)
+├── scripts/              # Operational and Demo Scripts
+│   ├── run_dashboard.py  # One-command Web Visualizer launcher
+│   ├── demo_workers.py   # Competing workers distributed coordination demo
+│   └── failure_injection.py
+└── tests/                # 30 Unit, Integration, Chaos, and Gateway verification tests
+```
+
+---
+
 ## Quickstart
 
-### 1. Local Setup
+### 1. Launch Interactive Web Visualizer Dashboard
 
-Install dependencies and compile protobufs:
+Start a 5-node cluster with real-time consensus topology, live WAL inspector, lock studio, and click-to-partition chaos simulator:
 
 ```bash
-# Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# Install backend dependencies
+pip install -e ".[dev,gateway]"
 
-# Install dependencies in editable mode
-pip install -e ".[dev]"
-
-# Compile proto files
-python scripts/build_protos.py
+# Launch Web Dashboard + Cluster Gateway on http://localhost:8000
+python scripts/run_dashboard.py
 ```
 
 ### 2. Run Test Suite
 
-Run the full 26-test verification suite:
+Run all 30 automated verification tests:
 
 ```bash
 pytest tests/ -v
