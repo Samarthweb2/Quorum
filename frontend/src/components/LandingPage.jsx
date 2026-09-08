@@ -42,6 +42,10 @@ function QuorumStackLogo({ size = 26, color = "#f59e0b" }) {
   );
 }
 
+// Backward-compatibility alias
+const TemporalCloverLogo = QuorumStackLogo;
+
+
 
 // GitHub Mark
 function GitHubMark({ size = 20, color = "#FFFFFF" }) {
@@ -1075,12 +1079,13 @@ tools = [lock_tool, execute_ledger_mutation]
       <footer style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', background: '#050608', padding: '36px 24px', marginTop: 'auto' }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <TemporalCloverLogo size={22} color="#FFFFFF" />
+            <QuorumStackLogo size={22} color="#f59e0b" />
             <span style={{ fontSize: '16px', fontWeight: 400, color: '#ffffff' }}>Quorum</span>
             <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '12px' }}>
               Open-source distributed consensus & locking engine under the MIT License.
             </span>
           </div>
+
 
           <div style={{ display: 'flex', gap: '16px' }}>
             <button onClick={onLaunchDashboard} className="btn-temporal-primary">
