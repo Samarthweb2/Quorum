@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { 
   Search, Play, Pause, RotateCcw, CheckCircle2, Copy, Check, Lock, 
   Cpu, Server, Activity, AlertTriangle, ShieldAlert, Layers,
-  Terminal, Shield, Zap, ExternalLink, Code2, Database
+  Terminal, Shield, Zap, ExternalLink, Code2, Database, Bot
 } from 'lucide-react';
+
 
 // Exact Temporal 4-Loop Geometric Logo Mark
 function TemporalCloverLogo({ size = 26, color = "#FFFFFF" }) {
@@ -179,8 +180,24 @@ service QuorumService {
   rpc ReleaseLock (ReleaseLockRequest) returns (ReleaseLockResponse);
   rpc GetLock     (GetLockRequest)     returns (GetLockResponse);
   rpc WatchLeader (WatchLeaderRequest) returns (stream LeaderNotification);
-}`
+}`,
+
+    'langchain-agent': `# 5. LangChain Autonomous AI Agent with Quorum Locking
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from quorum.ai.tools import QuorumLockTool, QuorumAgentGuard
+from quorum.client.client import QuorumClient
+
+# Connect to Quorum 5-Node Raft Cluster
+quorum_client = QuorumClient(servers=["127.0.0.1:50051", "127.0.0.1:50052"])
+
+# Equip Agent with QuorumLockTool
+lock_tool = QuorumLockTool(client=quorum_client, agent_id="settlement-agent")
+tools = [lock_tool, execute_ledger_mutation]
+
+# The agent autonomously acquires a Raft lease + 64-bit monotonic fencing token.
+# If LLM reasoning stalls, downstream storage rejects stale writes to prevent double-spending!`
   };
+
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(codeSnippets[activeCodeTab]);
@@ -208,9 +225,11 @@ service QuorumService {
             <a href="#sandbox" className="temporal-nav-link">Interactive Sandbox</a>
             <a href="#fencing-proof" className="temporal-nav-link">Fencing Proof</a>
             <a href="#architecture" className="temporal-nav-link">Architecture</a>
+            <a href="#ai-coordination" className="temporal-nav-link" style={{ color: '#c084fc' }}>AI Agents</a>
             <a href="#sdk-snippets" className="temporal-nav-link">SDK Snippets</a>
             <a href="#comparison" className="temporal-nav-link">Comparison</a>
           </div>
+
 
           {/* Right Actions: Search, GitHub Logo, Try Free, Log In */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
@@ -809,8 +828,76 @@ service QuorumService {
         </div>
       </section>
 
+      {/* AI Agent Swarm Section */}
+      <section id="ai-coordination" style={{ padding: '80px 24px', background: 'radial-gradient(ellipse at center top, rgba(168, 85, 247, 0.12) 0%, rgba(6, 7, 10, 0.9) 70%)', borderTop: '1px solid rgba(168, 85, 247, 0.25)' }}>
+        <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
+          
+          <div style={{ textAlign: 'center', marginBottom: '44px' }}>
+            <div className="temporal-badge" style={{ marginBottom: '12px', borderColor: 'rgba(168, 85, 247, 0.4)', color: '#c084fc', background: 'rgba(168, 85, 247, 0.1)' }}>
+              <Bot size={12} />
+              AI AGENT COORDINATION & MULTI-AGENT LOCKING
+            </div>
+            <h2 style={{ fontSize: '2.4rem', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.02em' }}>
+              The World's Best AI Agents Run on Quorum
+            </h2>
+            <p style={{ fontSize: '1.05rem', color: '#9ca3af', maxWidth: '780px', margin: '0 auto', lineHeight: 1.6 }}>
+              Autonomous AI agents executing LangChain tools, CrewAI workflows, and LLM reasoning cycles share critical databases and external APIs. Quorum eliminates double-execution, race conditions, and zombie agent overwrites using leader-backed Raft leases and 64-bit monotonic fencing tokens.
+            </p>
+          </div>
+
+          <div className="glass-panel" style={{ padding: '36px', borderColor: 'rgba(168, 85, 247, 0.3)', background: 'rgba(14, 18, 30, 0.85)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginBottom: '32px' }}>
+              <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '12px', padding: '24px' }}>
+                <div style={{ fontSize: '1.8rem', marginBottom: '12px' }}>💳</div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: '#f8fafc', marginBottom: '8px' }}>Settlement Agent (Finance)</h3>
+                <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.6 }}>
+                  Validates incoming payment batches, debits accounts, and generates proof tokens without double-spending.
+                </p>
+                <div style={{ marginTop: '12px', fontSize: '0.75rem', color: '#38bdf8', fontFamily: 'var(--font-mono)' }}>
+                  Tool: <code>QuorumLockTool.acquire('ledger')</code>
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(0, 242, 170, 0.05)', border: '1px solid rgba(0, 242, 170, 0.2)', borderRadius: '12px', padding: '24px' }}>
+                <div style={{ fontSize: '1.8rem', marginBottom: '12px' }}>📦</div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: '#f8fafc', marginBottom: '8px' }}>Inventory Agent (Warehouse)</h3>
+                <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.6 }}>
+                  Allocates physical catalog stock and prevents simultaneous overselling across competing autonomous channels.
+                </p>
+                <div style={{ marginTop: '12px', fontSize: '0.75rem', color: '#00f2aa', fontFamily: 'var(--font-mono)' }}>
+                  Safety: <code>64-Bit Monotonic Fencing Tokens</code>
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(192, 132, 252, 0.05)', border: '1px solid rgba(192, 132, 252, 0.2)', borderRadius: '12px', padding: '24px' }}>
+                <div style={{ fontSize: '1.8rem', marginBottom: '12px' }}>🛡️</div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: '#f8fafc', marginBottom: '8px' }}>Risk & Audit Agent</h3>
+                <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.6 }}>
+                  Runs background reconciliation and audits ledger solvency. Guarantees consistency across distributed networks.
+                </p>
+                <div style={{ marginTop: '12px', fontSize: '0.75rem', color: '#c084fc', fontFamily: 'var(--font-mono)' }}>
+                  Consensus: <code>Raft Majority Quorum (3 of 5)</code>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <button
+                onClick={onLaunchDashboard}
+                className="btn-temporal-primary"
+                style={{ fontSize: '0.95rem', padding: '12px 28px' }}
+              >
+                Launch Live AI Agent Swarm Studio →
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
       {/* 7. Center Section: [SDK Snippets] */}
       <section id="sdk-snippets" style={{ padding: '80px 24px', background: 'rgba(6, 7, 10, 0.7)', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           
           <div style={{ textAlign: 'center', marginBottom: '36px' }}>
@@ -857,7 +944,15 @@ service QuorumService {
                 >
                   gRPC Protobuf Interface
                 </button>
+                <button 
+                  onClick={() => setActiveCodeTab('langchain-agent')}
+                  className={`tab-btn ${activeCodeTab === 'langchain-agent' ? 'active' : ''}`}
+                  style={{ color: activeCodeTab === 'langchain-agent' ? '#c084fc' : '#9ca3af', borderBottomColor: activeCodeTab === 'langchain-agent' ? '#c084fc' : 'transparent' }}
+                >
+                  LangChain AI Agent
+                </button>
               </div>
+
 
               <button 
                 onClick={handleCopyCode}

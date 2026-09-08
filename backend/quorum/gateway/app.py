@@ -18,11 +18,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from quorum.gateway.cluster_controller import ClusterController
+from quorum.ai.coordinator import AgentSwarmCoordinator
 
 logger = logging.getLogger("quorum.gateway.app")
 
-# Global cluster controller instance
+# Global cluster controller and AI coordinator instances
 controller: Optional[ClusterController] = None
+ai_coordinator: Optional[AgentSwarmCoordinator] = None
 connected_websockets: Set[WebSocket] = set()
 
 
@@ -47,17 +49,22 @@ async def _safe_send(ws: WebSocket, payload: str) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global controller
+    global controller, ai_coordinator
     logger.info("Starting Quorum Visualizer Gateway...")
     controller = ClusterController(
         node_ids=["node-1", "node-2", "node-3", "node-4", "node-5"],
         on_broadcast_event=broadcast_to_websockets,
     )
     await controller.initialize_cluster()
+    ai_coordinator = AgentSwarmCoordinator(
+        cluster_controller=controller,
+        on_event_broadcast=broadcast_to_websockets,
+    )
     yield
     logger.info("Shutting down Quorum Visualizer Gateway...")
     if controller:
         await controller.shutdown()
+
 
 
 app = FastAPI(
@@ -198,6 +205,38 @@ async def simulate_zombie_worker(req: ZombieSimReq):
     if not controller:
         raise HTTPException(status_code=503, detail="Cluster not initialized")
     return await controller.simulate_zombie_worker(req.resource_name)
+
+
+# =============================================================================
+# AI Agent Swarm Coordination Endpoints
+# =============================================================================
+
+class AiSimReq(BaseModel):
+    scenario: str = Field(default="safe", description="Scenario: 'safe' | 'zombie' | 'chaos'")
+    resource: str = Field(default="shared-financial-ledger", description="Resource name to coordinate")
+
+
+@app.get("/api/ai/status")
+async def get_ai_status(resource: str = "shared-financial-ledger"):
+    if not ai_coordinator:
+        raise HTTPException(status_code=503, detail="AI Coordinator not initialized")
+    return ai_coordinator.get_status(resource)
+
+
+@app.post("/api/ai/simulate")
+async def simulate_ai_coordination(req: AiSimReq):
+    if not ai_coordinator:
+        raise HTTPException(status_code=503, detail="AI Coordinator not initialized")
+
+    if req.scenario == "safe":
+        return await ai_coordinator.run_safe_swarm(req.resource)
+    elif req.scenario == "zombie":
+        return await ai_coordinator.run_zombie_mitigation(req.resource)
+    elif req.scenario == "chaos":
+        return await ai_coordinator.run_unprotected_chaos(req.resource)
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid scenario '{req.scenario}'. Must be 'safe', 'zombie', or 'chaos'.")
+
 
 
 # =============================================================================

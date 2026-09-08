@@ -1,5 +1,6 @@
 import React from 'react';
-import { Crown, Shield, Activity, Radio, AlertTriangle, Layers, Zap } from 'lucide-react';
+import { Crown, Shield, Activity, Radio, AlertTriangle, Layers, Zap, Bot } from 'lucide-react';
+
 
 export default function Header({ status, wsConnected, activeTab, setActiveTab, onSimulateZombie, onBackToLanding }) {
   const health = status?.health || 'CONNECTING';
@@ -170,7 +171,19 @@ export default function Header({ status, wsConnected, activeTab, setActiveTab, o
             </span>
           )}
         </button>
+        <button 
+          className={`tab-btn ${activeTab === 'ai-agents' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ai-agents')}
+          style={{ color: activeTab === 'ai-agents' ? '#c084fc' : '#94a3b8', borderBottomColor: activeTab === 'ai-agents' ? '#c084fc' : 'transparent' }}
+        >
+          <Bot size={16} />
+          AI Agent Swarm
+          <span style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', fontSize: '0.7rem', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>
+            3 Agents
+          </span>
+        </button>
       </div>
     </header>
   );
 }
+

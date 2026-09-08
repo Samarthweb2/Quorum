@@ -6,6 +6,8 @@ import LockStudio from './components/LockStudio';
 import WalInspector from './components/WalInspector';
 import ChaosSandbox from './components/ChaosSandbox';
 import ZombieSimModal from './components/ZombieSimModal';
+import AiAgentStudio from './components/AiAgentStudio';
+
 
 export default function App() {
   const [view, setView] = useState('landing'); // 'landing' | 'dashboard'
@@ -223,7 +225,12 @@ export default function App() {
                 onSimulateZombie={handleSimulateZombie}
               />
             )}
+
+            {activeTab === 'ai-agents' && (
+              <AiAgentStudio />
+            )}
           </main>
+
         </div>
       )}
 
