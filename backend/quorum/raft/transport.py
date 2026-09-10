@@ -7,7 +7,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Optional
-from quorum.raft.types import AppendEntriesArgs, AppendEntriesReply, RequestVoteArgs, RequestVoteReply
+from quorum.raft.types import (
+    AppendEntriesArgs,
+    AppendEntriesReply,
+    InstallSnapshotArgs,
+    InstallSnapshotReply,
+    RequestVoteArgs,
+    RequestVoteReply,
+)
 
 
 class RaftTransport(ABC):
@@ -25,6 +32,13 @@ class RaftTransport(ABC):
         self, target_node_id: str, args: AppendEntriesArgs, timeout_s: float = 0.5
     ) -> Optional[AppendEntriesReply]:
         """Sends AppendEntries RPC to target node. Returns None on network failure/timeout."""
+        pass
+
+    @abstractmethod
+    async def send_install_snapshot(
+        self, target_node_id: str, args: InstallSnapshotArgs, timeout_s: float = 2.0
+    ) -> Optional[InstallSnapshotReply]:
+        """Sends InstallSnapshot RPC to target node. Returns None on network failure/timeout."""
         pass
 
     @abstractmethod

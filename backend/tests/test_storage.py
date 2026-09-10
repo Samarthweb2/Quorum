@@ -169,3 +169,66 @@ def test_log_storage_crc_corruption(tmp_path: Path):
     assert len(reloaded) == 1
     assert reloaded.last_log_index == 1
     assert reloaded.get_entry(1).command_type == "CMD1"
+
+
+def test_log_storage_snapshot_and_compaction(tmp_path: Path):
+    log = LogStorage(tmp_path)
+    entries = [
+        LogEntry(index=1, term=1, command_type="ACQUIRE"),
+        LogEntry(index=2, term=1, command_type="RENEW"),
+        LogEntry(index=3, term=2, command_type="RELEASE"),
+        LogEntry(index=4, term=2, command_type="ACQUIRE"),
+        LogEntry(index=5, term=2, command_type="RENEW"),
+    ]
+    log.append_entries(entries)
+    assert len(log) == 5
+    assert log.last_log_index == 5
+
+    # Take snapshot up to index 3
+    fake_state = b'{"fencing_token_counter": 10, "locks": {}}'
+    log.save_snapshot(last_included_index=3, last_included_term=2, data=fake_state)
+    log.compact_prefix(up_to_index=3)
+
+    # After compaction: only entries 4 and 5 remain in WAL
+    assert len(log) == 2
+    assert log.last_log_index == 5
+    assert log.last_included_index == 3
+    assert log.last_included_term == 2
+    assert log.first_log_index == 4
+    assert [e.index for e in log.entries] == [4, 5]
+
+    # Reload fresh LogStorage from disk
+    reloaded = LogStorage(tmp_path)
+    assert len(reloaded) == 2
+    assert reloaded.last_included_index == 3
+    assert reloaded.last_included_term == 2
+    assert reloaded.last_log_index == 5
+    assert [e.index for e in reloaded.entries] == [4, 5]
+
+    idx, term, data = reloaded.load_snapshot()
+    assert idx == 3
+    assert term == 2
+    assert data == fake_state
+
+
+def test_lock_state_machine_snapshot():
+    from quorum.state_machine.lock_manager import LockStateMachine
+    sm = LockStateMachine()
+    e1 = LogEntry(index=1, term=1, command_type="ACQUIRE", data={"key": "db", "client_id": "c1", "ttl_ms": 10000}, timestamp_ms=1000)
+    res = sm.apply(e1)
+    assert res.success
+    assert res.fence_token == 1
+
+    # Export snapshot
+    snap_bytes = sm.export_snapshot()
+
+    # Create new fresh state machine and restore
+    sm2 = LockStateMachine()
+    assert len(sm2.locks) == 0
+    sm2.import_snapshot(snap_bytes)
+
+    assert sm2.last_applied_index == 1
+    assert sm2.fencing_token_counter == 1
+    assert "db" in sm2.locks
+    assert sm2.locks["db"].owner == "c1"
+    assert sm2.locks["db"].fence_token == 1

@@ -23,6 +23,12 @@ MAGIC = b"QLOG"
 HEADER_FORMAT = ">4sII"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 12 bytes
 
+# Snapshot frame format:
+# [MAGIC: 4 bytes "QSNP"] [LAST_INCLUDED_INDEX: 8 bytes uint64] [LAST_INCLUDED_TERM: 8 bytes uint64] [DATA_LEN: 4 bytes uint32] [CRC32: 4 bytes uint32] [DATA: N bytes]
+SNAPSHOT_MAGIC = b"QSNP"
+SNAPSHOT_HEADER_FORMAT = ">4sQQII"
+SNAPSHOT_HEADER_SIZE = struct.calcsize(SNAPSHOT_HEADER_FORMAT)  # 28 bytes
+
 
 @dataclass
 class LogEntry:
@@ -128,12 +134,109 @@ class LogStorage:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.wal_path = self.data_dir / "raft.wal"
+        self.wal_tmp_path = self.data_dir / "raft.wal.tmp"
+        self.snapshot_path = self.data_dir / "snapshot.bin"
+        self.snapshot_tmp_path = self.data_dir / "snapshot.bin.tmp"
+
+        self.last_included_index: int = 0
+        self.last_included_term: int = 0
+        self._load_snapshot_metadata()
 
         # In-memory index
         self._entries: List[LogEntry] = []
         self._offsets: List[int] = []  # byte offset in file for each entry
 
         self._recover_and_index()
+
+    def _load_snapshot_metadata(self) -> None:
+        """Reads snapshot header to set last_included_index and last_included_term."""
+        if not self.snapshot_path.exists():
+            return
+        try:
+            with open(self.snapshot_path, "rb") as f:
+                header_bytes = f.read(SNAPSHOT_HEADER_SIZE)
+                if len(header_bytes) < SNAPSHOT_HEADER_SIZE:
+                    return
+                magic, last_idx, last_term, data_len, expected_crc = struct.unpack(
+                    SNAPSHOT_HEADER_FORMAT, header_bytes
+                )
+                if magic != SNAPSHOT_MAGIC:
+                    return
+                data_bytes = f.read(data_len)
+                if len(data_bytes) == data_len and zlib.crc32(data_bytes) == expected_crc:
+                    self.last_included_index = last_idx
+                    self.last_included_term = last_term
+        except Exception:
+            pass
+
+    def load_snapshot(self) -> Tuple[int, int, Optional[bytes]]:
+        """Loads and validates the snapshot from disk, returning (last_included_index, last_included_term, data)."""
+        if not self.snapshot_path.exists():
+            return (self.last_included_index, self.last_included_term, None)
+        try:
+            with open(self.snapshot_path, "rb") as f:
+                header_bytes = f.read(SNAPSHOT_HEADER_SIZE)
+                if len(header_bytes) < SNAPSHOT_HEADER_SIZE:
+                    return (self.last_included_index, self.last_included_term, None)
+                magic, last_idx, last_term, data_len, expected_crc = struct.unpack(
+                    SNAPSHOT_HEADER_FORMAT, header_bytes
+                )
+                if magic != SNAPSHOT_MAGIC:
+                    return (self.last_included_index, self.last_included_term, None)
+                data_bytes = f.read(data_len)
+                if len(data_bytes) == data_len and zlib.crc32(data_bytes) == expected_crc:
+                    self.last_included_index = last_idx
+                    self.last_included_term = last_term
+                    return (last_idx, last_term, data_bytes)
+        except Exception:
+            pass
+        return (self.last_included_index, self.last_included_term, None)
+
+    def save_snapshot(self, last_included_index: int, last_included_term: int, data: bytes) -> None:
+        """Atomically saves snapshot to disk with CRC32 framing and fsync."""
+        data_len = len(data)
+        crc = zlib.crc32(data)
+        header = struct.pack(
+            SNAPSHOT_HEADER_FORMAT,
+            SNAPSHOT_MAGIC,
+            last_included_index,
+            last_included_term,
+            data_len,
+            crc,
+        )
+        with open(self.snapshot_tmp_path, "wb") as f:
+            f.write(header)
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(self.snapshot_tmp_path, self.snapshot_path)
+        self.last_included_index = last_included_index
+        self.last_included_term = last_included_term
+
+    def compact_prefix(self, up_to_index: int) -> None:
+        """
+        Discards all entries in memory and WAL with index <= up_to_index.
+        Rewrites the remaining entries to a compacted WAL atomically.
+        """
+        keep_entries = [e for e in self._entries if e.index > up_to_index]
+        self._entries = keep_entries
+        self._offsets = []
+
+        with open(self.wal_tmp_path, "wb") as f:
+            for entry in keep_entries:
+                record_offset = f.tell()
+                payload = entry.serialize()
+                payload_len = len(payload)
+                crc = zlib.crc32(payload)
+                header = struct.pack(HEADER_FORMAT, MAGIC, payload_len, crc)
+                f.write(header)
+                f.write(payload)
+                self._offsets.append(record_offset)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(self.wal_tmp_path, self.wal_path)
 
     def _recover_and_index(self) -> None:
         """
@@ -295,14 +398,20 @@ class LogStorage:
     @property
     def last_log_index(self) -> int:
         if not self._entries:
-            return 0
+            return self.last_included_index
         return self._entries[-1].index
 
     @property
     def last_log_term(self) -> int:
         if not self._entries:
-            return 0
+            return self.last_included_term
         return self._entries[-1].term
+
+    @property
+    def first_log_index(self) -> int:
+        if not self._entries:
+            return self.last_included_index + 1
+        return self._entries[0].index
 
     @property
     def entries(self) -> List[LogEntry]:

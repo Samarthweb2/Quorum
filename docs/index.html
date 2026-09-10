@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quorum — Distributed Coordination Engine</title>
+  <meta name="description" content="Coordinate distributed services and eliminate race conditions with pure Raft consensus and strictly monotonic fencing tokens." />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='25' r='14' fill='%230284C7'/%3E%3Ccircle cx='25' cy='75' r='14' fill='%2300B7C5'/%3E%3Ccircle cx='75' cy='75' r='14' fill='%2300B7C5'/%3E%3Cpath d='M50 25L25 75M50 25L75 75M25 75L75 75' stroke='%230F172A' stroke-width='4' fill='none'/%3E%3C/svg%3E" />
+</head>
+<body>
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="https://github.com/Samarthweb2/Quorum" class="brand-group" id="brand-link">
+        <!-- Abstract Three-Node Consensus Icon -->
+        <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Quorum Three-Node Logo">
+          <circle cx="50" cy="22" r="14" fill="#0284C7" />
+          <circle cx="22" cy="74" r="14" fill="#00B7C5" />
+          <circle cx="78" cy="74" r="14" fill="#00B7C5" />
+          <line x1="50" y1="22" x2="22" y2="74" stroke="#0F172A" stroke-width="5" stroke-linecap="round" />
+          <line x1="50" y1="22" x2="78" y2="74" stroke="#0F172A" stroke-width="5" stroke-linecap="round" />
+          <line x1="22" y1="74" x2="78" y2="74" stroke="#0F172A" stroke-width="5" stroke-linecap="round" />
+          <circle cx="50" cy="22" r="6" fill="#FFFFFF" />
+          <circle cx="22" cy="74" r="6" fill="#FFFFFF" />
+          <circle cx="78" cy="74" r="6" fill="#FFFFFF" />
+        </svg>
+        <span class="brand-title">Quorum</span      </a>
+      <nav class="nav-links">
+        <a href="#live-consensus" class="nav-link">Consensus</a>
+        <a href="#try-lock" class="nav-link">Try Lock</a>
+        <a href="#correctness" class="nav-link">Architecture</a>
+        <a href="#fencing-proof" class="nav-link">Fencing</a>
+        <a href="#chaos-testing" class="nav-link">Fault Tolerance</a>
+      </nav>
+
+      <div class="nav-actions">
+        <button id="login-nav-btn" class="login-nav-btn" aria-label="Log in to Control Plane">
+          Log In
+        </button>
+
+        <a href="https://github.com/Samarthweb2/Quorum" class="github-pill-btn" target="_blank" rel="noopener noreferrer" aria-label="GitHub Repository">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017C2 16.446 4.869 20.205 8.847 21.533C9.347 21.624 9.53 21.314 9.53 21.051C9.53 20.816 9.52 20.033 9.516 19.208C6.734 19.813 6.147 18.019 6.147 18.019C5.692 16.864 5.034 16.557 5.034 16.557C4.127 15.936 5.103 15.949 5.103 15.949C6.106 16.02 6.634 16.98 6.634 16.98C7.525 18.508 8.971 18.067 9.54 17.812C9.631 17.166 9.889 16.726 10.174 16.476C7.953 16.223 5.618 15.362 5.618 11.523C5.618 10.428 6.009 9.534 6.65 8.835C6.547 8.581 6.202 7.56 6.748 6.195C6.748 6.195 7.589 5.925 9.502 7.221C10.301 6.999 11.154 6.888 12.003 6.884C12.852 6.888 13.705 6.999 14.505 7.221C16.417 5.924 17.256 6.195 17.256 6.195C17.804 7.56 17.458 8.581 17.356 8.835C17.999 9.534 18.386 10.428 18.386 11.523C18.386 15.372 16.046 16.22 13.818 16.468C14.178 16.779 14.498 17.393 14.498 18.333C14.498 19.683 14.486 20.768 14.486 21.051C14.486 21.317 14.666 21.631 15.174 21.531C19.149 20.201 22.017 16.444 22.017 12.017C22.017 6.484 17.538 2 12 2Z" />
+          </svg>
+          <span>GitHub</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- 1. HERO SECTION (CLEAN WHITE & BLUE - RESTRAINED WHITESPACE) -->
+  <section class="hero-section">
+    <div class="hero-content">
+      <h1 class="hero-heading">
+        Distributed Coordination Engine
+      </h1>
+      <p class="hero-subheading">
+        Coordinate distributed services and eliminate race conditions with pure Raft consensus. Engineered with strictly monotonic fencing tokens to guarantee zero data loss.
+      </p>
+      <div class="hero-actions">
+        <a href="#live-consensus" class="btn-primary">
+          Explore Cluster
+        </a>
+        <a href="https://github.com/Samarthweb2/Quorum" class="btn-secondary" target="_blank" rel="noopener noreferrer">
+          GitHub
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- QUICK STATUS STRIP -->
+  <div class="quick-strip-container">
+    <div class="quick-strip-card">
+      <span>Coordinate your distributed microservices instantly with pure Raft consensus.</span>
+      <a href="#login-modal" class="quick-strip-btn" onclick="openLoginModal()">
+        <span>Launch Control Plane →</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+      2. SECTION 2: "SEE QUORUM MAKE A DECISION" (ONE PRODUCT SURFACE)
+      ========================================================================= -->
+  <section class="product-section" id="live-consensus">
+    <div class="section-container">
+      
+      <div class="section-heading-block">
+        <span class="eyebrow-text">LIVE CONSENSUS</span>
+        <h2 class="product-title">See Quorum make a decision.</h2>
+        <p class="product-desc">
+          Send a real lock request to the cluster and watch it move from proposal to committed state.
+        </p>
+      </div>
+
+      <!-- SINGLE UNIFIED INFRASTRUCTURE SURFACE -->
+      <div class="infra-surface">
+        
+        <!-- Top Bar: Cluster Health & Real-time Heartbeat -->
+        <div class="infra-surface-top">
+          <div class="infra-title-tag">
+            <span>LIVE CLUSTER</span>
+          </div>
+          <div class="infra-status-indicator">
+            <span class="live-dot-pulse"></span>
+            <span>OPERATIONAL</span>
+          </div>
+        </div>
+
+        <!-- Topology Line: Node 1 (Leader) - Node 2 - Node 3 -->
+        <div class="infra-nodes-row">
+          <div class="infra-node-cell leader">
+            <div class="node-role-label">LEADER</div>
+            <div class="node-id-label">NODE 01</div>
+            <div class="node-dot">●</div>
+          </div>
+          
+          <div class="infra-heartbeat-line">
+            <div class="heartbeat-pulse-fx"></div>
+            <span class="heartbeat-caption">heartbeat · 2.2s</span>
+          </div>
+
+          <div class="infra-node-cell follower">
+            <div class="node-role-label">FOLLOWER</div>
+            <div class="node-id-label">NODE 02</div>
+            <div class="node-dot">●</div>
+          </div>
+
+          <div class="infra-heartbeat-line">
+            <div class="heartbeat-pulse-fx"></div>
+            <span class="heartbeat-caption">heartbeat · 2.2s</span>
+          </div>
+
+          <div class="infra-node-cell follower">
+            <div class="node-role-label">FOLLOWER</div>
+            <div class="node-id-label">NODE 03</div>
+            <div class="node-dot">●</div>
+          </div>
+        </div>
+
+        <!-- Raft State Monospace Bar -->
+        <div class="infra-metrics-bar font-mono">
+          <div class="metric-col">
+            <span class="m-label">TERM</span>
+            <span class="m-val" id="infra-term-val">42</span>
+          </div>
+          <div class="metric-col">
+            <span class="m-label">COMMIT INDEX</span>
+            <span class="m-val" id="infra-commit-val">1,284</span>
+          </div>
+          <div class="metric-col">
+            <span class="m-label">QUORUM</span>
+            <span class="m-val">3 / 5</span>
+          </div>
+        </div>
+
+        <div class="infra-divider"></div>
+
+        <!-- Last Operation / Dynamic Request Surface -->
+        <div class="infra-operation-pane">
+          <div class="op-header">
+            <span class="op-label">LAST OPERATION</span>
+            <span class="phase-pill committed" id="infra-phase-pill">✓ Committed to State Machine</span>
+          </div>
+
+          <div class="op-detail-row">
+            <div class="op-call font-mono">
+              AcquireLock("<span>db-writer</span>")
+            </div>
+            <div class="op-token font-mono" id="infra-token-val">
+              #1042
+            </div>
+          </div>
+
+          <div class="op-meta-row font-mono">
+            <span class="meta-status">committed</span>
+            <span class="meta-time" id="infra-time-val">42ms ago</span>
+          </div>
+
+          <!-- In-place Replication Trace -->
+          <div class="in-place-trace font-mono" id="infra-trace-box" style="display: block;">
+            <div class="trace-row">
+              <span class="trace-label">REPLICATION:</span>
+              <span class="trace-nodes" id="infra-trace-nodes">
+                Node 01 <strong class="chk">✓</strong> · Node 02 <strong class="chk">✓</strong> · Node 03 <strong class="chk">✓</strong> · Node 04 <span class="dim">—</span> · Node 05 <span class="dim">—</span>
+              </span>
+              <span class="trace-summary" id="infra-trace-summary">3 / 5 acknowledged</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Action CTA inside surface -->
+        <div class="infra-footer-action">
+          <button id="run-real-request-btn" class="btn-trigger-action">
+            <span>Run a real request →</span>
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+      3. SECTION 3: "TRY A DISTRIBUTED LOCK" (TACTILE WIDGET)
+      ========================================================================= -->
+  <section class="product-section alt-bg" id="try-lock">
+    <div class="section-container">
+      
+      <div class="section-heading-block">
+        <span class="eyebrow-text">INTERACTIVE</span>
+        <h2 class="product-title">Try a distributed lock.</h2>
+        <p class="product-desc">
+          Acquire a mutual exclusion lock across the cluster. If a worker pauses or network partitions occur, fencing guarantees zero write corruption.
+        </p>
+      </div>
+
+      <div class="tactile-lock-box">
+        
+        <!-- Unlocked View -->
+        <div class="lock-unlocked-view" id="lock-unlocked-container">
+          <div class="lock-field-group">
+            <label class="lock-field-label">Resource</label>
+            <input 
+              type="text" 
+              id="try-resource-input"
+              value="db-writer" 
+              class="lock-input font-mono"
+            />
+          </div>
+
+          <div class="lock-field-group">
+            <label class="lock-field-label">Lease</label>
+            <div class="lock-readonly-val font-mono">5 seconds</div>
+          </div>
+
+          <div style="margin-top: 24px;">
+            <button id="acquire-try-btn" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px;">
+              Acquire lock
+            </button>
+          </div>
+        </div>
+
+        <!-- Locked View (Hidden Initially) -->
+        <div class="lock-locked-view font-mono" id="lock-locked-container" style="display: none;">
+          <div class="locked-badge-row">
+            <span class="locked-dot">●</span>
+            <span class="locked-text">LOCKED</span>
+          </div>
+
+          <div class="locked-stats-grid">
+            <div class="locked-stat-item">
+              <span class="lbl">Resource</span>
+              <span class="val" id="locked-res-val">db-writer</span>
+            </div>
+
+            <div class="locked-stat-item">
+              <span class="lbl">Fence token</span>
+              <span class="val token-color" id="locked-token-val">#1042</span>
+            </div>
+
+            <div class="locked-stat-item">
+              <span class="lbl">Owner</span>
+              <span class="val">demo-client</span>
+            </div>
+
+            <div class="locked-stat-item">
+              <span class="lbl">Expires in</span>
+              <span class="val" id="locked-time-val">5.0s</span>
+            </div>
+          </div>
+
+          <div class="locked-timer-bar">
+            <div class="locked-timer-progress" id="locked-timer-bar" style="width: 100%;"></div>
+          </div>
+
+          <div style="margin-top: 24px;">
+            <button id="release-try-btn" class="btn-secondary" style="width: 100%; justify-content: center; padding: 10px; color: #EF4444; border-color: rgba(239, 68, 68, 0.3);">
+              Release lock
+            </button>
+          </div>
+        </div>
+
+        <div class="lock-caption-sentence">
+          Every successful acquisition receives a monotonically increasing fencing token, preventing stale workers from writing after their lease expires.
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+      4. SECTION 4: "BUILT FOR CORRECTNESS" (3 TYPOGRAPHIC COLUMNS)
+      ========================================================================= -->
+  <section class="product-section" id="correctness">
+    <div class="section-container">
+      
+      <div class="section-heading-block">
+        <span class="eyebrow-text">ENGINEERING</span>
+        <h2 class="product-title">Built for correctness.</h2>
+        <p class="product-desc">
+          No black-box binaries. Engineered from first principles with pure Python Raft consensus and strictly ordered storage guards.
+        </p>
+      </div>
+
+      <div class="three-columns-grid">
+        
+        <!-- Column 1: Consensus -->
+        <div class="correctness-col">
+          <h3 class="col-title">Consensus</h3>
+          <p class="col-desc">
+            Cluster membership coordinates leader election and linearizable log progression across an odd-numbered quorum of nodes.
+          </p>
+          <ul class="col-feature-list font-mono">
+            <li>Raft state machine</li>
+            <li>Leader election</li>
+            <li>Log replication</li>
+            <li>Quorum commits (3/5)</li>
+          </ul>
+        </div>
+
+        <!-- Column 2: Durability -->
+        <div class="correctness-col">
+          <h3 class="col-title">Durability</h3>
+          <p class="col-desc">
+            Mutations are guaranteed durable on disk before network acknowledgement, preventing state loss across sudden process crashes.
+          </p>
+          <ul class="col-feature-list font-mono">
+            <li>Write-ahead log (WAL)</li>
+            <li>CRC32 validation</li>
+            <li>Crash recovery</li>
+            <li>Atomic persistence</li>
+          </ul>
+        </div>
+
+        <!-- Column 3: Coordination -->
+        <div class="correctness-col">
+          <h3 class="col-title">Coordination</h3>
+          <p class="col-desc">
+            Protects downstream databases and message queues from slow zombie workers holding expired mutex leases.
+          </p>
+          <ul class="col-feature-list font-mono">
+            <li>Monotonic fencing</li>
+            <li>64-bit int tokens</li>
+            <li>Lease TTL expiry</li>
+            <li>Stale-write protection</li>
+          </ul>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+      5. SECTION 5: "FENCING" (MINIMAL, TECHNICALLY MEANINGFUL PROOF)
+      ========================================================================= -->
+  <section class="product-section alt-bg" id="fencing-proof">
+    <div class="section-container">
+      
+      <div class="section-heading-block">
+        <span class="eyebrow-text">SAFETY GUARANTEE</span>
+        <h2 class="product-title">Why locks fail without fencing.</h2>
+        <p class="product-desc">
+          Martin Kleppmann proved that simple distributed locks cannot protect storage against slow workers. Here is how Quorum solves it.
+        </p>
+      </div>
+
+      <div class="fencing-flow-container">
+        
+        <!-- Lifecycle diagram -->
+        <div class="fencing-minimal-flow font-mono">
+          <div class="flow-step">
+            <span class="step-title">WORKER A</span>
+            <span class="step-meta">TOKEN #1042</span>
+          </div>
+          
+          <div class="flow-connector-vertical">│<br />▼</div>
+
+          <div class="flow-step highlight-stall">
+            <span class="step-title">STALLS</span>
+            <span class="step-meta">JVM GC pause · 10s</span>
+          </div>
+
+          <div class="flow-connector-vertical">│<br />▼</div>
+
+          <div class="flow-step">
+            <span class="step-title">LEASE EXPIRES</span>
+            <span class="step-meta">5.0s TTL exceeded</span>
+          </div>
+
+          <div class="flow-connector-vertical">│<br />▼</div>
+
+          <div class="flow-step highlight-new">
+            <span class="step-title">WORKER B</span>
+            <span class="step-meta">TOKEN #1043 · NEW OWNER</span>
+          </div>
+        </div>
+
+        <!-- The Actual Rejected Operation -->
+        <div class="fencing-rejection-box font-mono">
+          <div class="rej-header">
+            <span>Worker A attempts late write:</span>
+          </div>
+
+          <div class="rej-data-grid">
+            <div class="rej-data-item">
+              <span class="k">token</span>
+              <span class="v">1042</span>
+            </div>
+            <div class="rej-data-item">
+              <span class="k">current</span>
+              <span class="v watermark">1043</span>
+            </div>
+          </div>
+
+          <div class="rej-verdict">
+            <div class="verdict-title">REJECTED</div>
+            <div class="verdict-sub">stale fencing token (#1042 &lt; #1043)</div>
+          </div>
+
+          <div class="rej-sql-sample">
+            <code>UPDATE orders SET status = 'DONE', last_fence = 1042 WHERE id = 99 AND last_fence &lt; 1042;</code>
+            <span class="sql-res">-- 0 rows affected. Storage preserved!</span>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+      6. SECTION 6: "WHAT HAPPENS WHEN THINGS FAIL?" (LIVE CLUSTER CHAOS)
+      ========================================================================= -->
+  <section class="product-section" id="chaos-testing">
+    <div class="section-container">
+      
+      <div class="section-heading-block">
+        <span class="eyebrow-text">FAULT TOLERANCE</span>
+        <h2 class="product-title">What happens when things fail?</h2>
+        <p class="product-desc">
+          Simulate real distributed failures against the cluster and watch consensus heal itself in milliseconds.
+        </p>
+      </div>
+
+      <div class="chaos-cluster-surface">
+        
+        <!-- Action Bar -->
+        <div class="chaos-controls-bar">
+          <span class="ctrl-label">SIMULATE:</span>
+          <div class="ctrl-btn-group">
+            <button id="chaos-kill-leader-btn" class="ctrl-btn">
+              Kill leader
+            </button>
+            <button id="chaos-partition-btn" class="ctrl-btn">
+              Partition node
+            </button>
+            <button id="chaos-stall-worker-btn" class="ctrl-btn">
+              Stall worker
+            </button>
+            <button id="chaos-reset-btn" class="ctrl-btn reset">
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <!-- Cluster Visual Graph -->
+        <div class="chaos-nodes-topology">
+          
+          <!-- Node 1 -->
+          <div class="chaos-node-box leader" id="c-node-1-box">
+            <div class="c-node-role" id="c-node-1-role">LEADER</div>
+            <div class="c-node-id">NODE 01</div>
+            <div class="c-node-glyph" id="c-node-1-glyph">●</div>
+            <div class="c-node-status" id="c-node-1-status">healthy</div>
+          </div>
+
+          <!-- Node 2 -->
+          <div class="chaos-node-box follower" id="c-node-2-box">
+            <div class="c-node-role" id="c-node-2-role">FOLLOWER</div>
+            <div class="c-node-id">NODE 02</div>
+            <div class="c-node-glyph" id="c-node-2-glyph">●</div>
+            <div class="c-node-status" id="c-node-2-status">healthy</div>
+          </div>
+
+          <!-- Node 3 -->
+          <div class="chaos-node-box follower" id="c-node-3-box">
+            <div class="c-node-role" id="c-node-3-role">FOLLOWER</div>
+            <div class="c-node-id">NODE 03</div>
+            <div class="c-node-glyph" id="c-node-3-glyph">●</div>
+            <div class="c-node-status" id="c-node-3-status">healthy</div>
+          </div>
+
+        </div>
+
+        <!-- Live Output Bar -->
+        <div class="chaos-output-bar font-mono">
+          <div class="output-term" id="c-output-term">TERM 42</div>
+          <div class="output-text" id="c-output-text">Cluster stable. Leader heartbeat regular at 2.2s.</div>
+        </div>
+
+      </div>
+
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-left">
+        <svg width="24" height="24" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="22" r="14" fill="#0284C7" />
+          <circle cx="22" cy="74" r="14" fill="#00B7C5" />
+          <circle cx="78" cy="74" r="14" fill="#00B7C5" />
+          <line x1="50" y1="22" x2="22" y2="74" stroke="#0F172A" stroke-width="5" stroke-linecap="round" />
+          <line x1="50" y1="22" x2="78" y2="74" stroke="#0F172A" stroke-width="5" stroke-linecap="round" />
+          <line x1="22" y1="74" x2="78" y2="74" stroke="#0F172A" stroke-width="5" stroke-linecap="round" />
+        </svg>
+        <div>
+          <span class="footer-brand">Quorum</span>
+          <p class="footer-text">Distributed consensus and lock manager. Open-source under MIT License.</p>
+        </div>
+      </div>
+
+      <div class="footer-links">
+        <a href="https://github.com/Samarthweb2/Quorum" class="footer-link" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/Samarthweb2/Quorum/blob/main/README.md" class="footer-link" target="_blank" rel="noopener noreferrer">Architecture Docs</a>
+        <a href="https://github.com/Samarthweb2/Quorum/blob/main/LICENSE" class="footer-link" target="_blank" rel="noopener noreferrer">MIT License</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- FLOATING AI AGENT CHAT ASSISTANT (EXACT FROM IMAGE 2) -->
+  <div id="ai-agent-widget" class="ai-agent-widget">
+    
+    <!-- Floating Circular Trigger Button -->
+    <button id="ai-launcher-btn" class="ai-launcher-btn" aria-label="Open Quorum AI Assistant">
+      <svg class="launcher-chat-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+      <svg class="launcher-close-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+
+    <!-- Slide-Up Chat Drawer Container (Image 2) -->
+    <div id="ai-drawer" class="ai-drawer">
+      
+      <!-- Dark Top Header (Image 2) -->
+      <div class="ai-drawer-header">
+        <div class="ai-header-top">
+          <div class="ai-avatar-circle">
+            <span>Q</span>
+          </div>
+          <button id="ai-close-btn" class="ai-close-btn" aria-label="Close Assistant">
+            ✕
+          </button>
+        </div>
+
+        <div class="ai-header-greeting">
+          <h3>Hi there 👋</h3>
+          <h2>How can we help?</h2>
+        </div>
+
+        <!-- "Send us a message" Action Card (Image 2) -->
+        <div id="ai-send-msg-card" class="ai-send-msg-card">
+          <span>Send us a message</span>
+          <span class="arrow-glyph">➤</span>
+        </div>
+      </div>
+
+      <!-- Middle Content: Interactive Chat Window -->
+      <div id="ai-chat-body" class="ai-chat-body">
+        
+        <!-- Tab 1: Home View -->
+        <div id="ai-home-view" class="ai-tab-view active">
+          <div class="ai-suggested-title">Suggested questions:</div>
+          <div class="ai-suggestions-list">
+            <button class="suggestion-chip" data-query="How does Quorum fencing protect against zombie workers?">
+              🛡️ How does fencing token protection work?
+            </button>
+            <button class="suggestion-chip" data-query="How does Raft leader election and failover work in Quorum?">
+              ⚡ How does Raft leader election work?
+            </button>
+            <button class="suggestion-chip" data-query="Show me Python code to acquire a distributed lock with TTL">
+              🐍 Python distributed lock example
+            </button>
+            <button class="suggestion-chip" data-query="How can autonomous LangChain AI agents coordinate using Quorum?">
+              🤖 AI Agent Swarm coordination with LangChain
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 2: Messages / Chat Thread View -->
+        <div id="ai-messages-view" class="ai-tab-view">
+          <div class="chat-messages-scroll" id="chat-messages-scroll">
+            <div class="chat-msg ai">
+              <div class="msg-bubble">
+                Hello! I am your <strong>Quorum AI Assistant</strong>. Ask me anything about distributed locks, Raft consensus, monotonic fencing tokens, or Python SDK integration!
+              </div>
+            </div>
+          </div>
+
+          <!-- Query Input Form -->
+          <form id="ai-query-form" class="ai-query-form">
+            <input 
+              type="text" 
+              id="ai-query-input" 
+              placeholder="Type your question..." 
+              autocomplete="off"
+            />
+            <button type="submit" class="ai-query-submit" aria-label="Send Query">
+              ➤
+            </button>
+          </form>
+        </div>
+
+      </div>
+
+      <!-- Bottom Navigation Bar: Home & Messages (Image 2) -->
+      <div class="ai-drawer-footer">
+        <button id="ai-tab-home-btn" class="ai-nav-tab active">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          <span>Home</span>
+        </button>
+        <button id="ai-tab-messages-btn" class="ai-nav-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Messages</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- LOG IN MODAL DIALOG -->
+  <div id="login-modal" class="login-modal-backdrop" style="display: none;">
+    <div class="login-modal-dialog">
+      <div class="login-modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #0284C7;"></span>
+          <h3>Log In to Quorum Control Plane</h3>
+        </div>
+        <button id="login-close-btn" class="login-close-btn">✕</button>
+      </div>
+      <div class="login-modal-body">
+        <p style="font-size: 0.88rem; color: #64748B; margin-bottom: 18px; line-height: 1.5;">
+          Access your live 5-node cluster, monitor real-time Raft terms, and manage active distributed leases across namespaces.
+        </p>
+        <form id="login-form">
+          <div style="margin-bottom: 14px;">
+            <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #231044; margin-bottom: 6px;">Email Address</label>
+            <input type="email" value="admin@quorum.cluster" style="width: 100%; padding: 10px 12px; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 0.88rem; outline: none; font-family: var(--font-mono);" required />
+          </div>
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; font-size: 0.78rem; font-weight: 600; color: #231044; margin-bottom: 6px;">Password</label>
+            <input type="password" value="••••••••••••" style="width: 100%; padding: 10px 12px; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 0.88rem; outline: none; font-family: var(--font-mono);" required />
+          </div>
+          <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.95rem;">
+            Sign In to Control Plane →
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

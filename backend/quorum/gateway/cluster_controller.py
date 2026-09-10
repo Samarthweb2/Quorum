@@ -27,6 +27,8 @@ from quorum.raft.transport import RaftTransport
 from quorum.raft.types import (
     AppendEntriesArgs,
     AppendEntriesReply,
+    InstallSnapshotArgs,
+    InstallSnapshotReply,
     RequestVoteArgs,
     RequestVoteReply,
     Role,
@@ -61,6 +63,7 @@ class InterceptedNetwork:
         self.partitions: Optional[List[Set[str]]] = None
         self.packet_loss_rate: float = 0.0
         self.latency_ms: float = 0.0
+        self.last_heartbeat_at: Dict[str, int] = {}
         self.on_rpc_event = on_rpc_event
         self._lock = asyncio.Lock()
 
@@ -86,6 +89,7 @@ class InterceptedNetwork:
 
     async def send_request_vote(self, from_node: str, to_node: str, args: RequestVoteArgs) -> Optional[RequestVoteReply]:
         now_ms = int(time.time() * 1000)
+        self.last_heartbeat_at[from_node] = now_ms
         connected = self.is_connected(from_node, to_node)
         dropped = not connected or (self.packet_loss_rate > 0 and random.random() < self.packet_loss_rate)
 
@@ -116,6 +120,7 @@ class InterceptedNetwork:
             self.emit_event(event_payload)
             return None
 
+        self.last_heartbeat_at[to_node] = now_ms
         try:
             reply = await target.handle_request_vote(args)
             event_payload["success"] = reply.vote_granted
@@ -128,6 +133,7 @@ class InterceptedNetwork:
 
     async def send_append_entries(self, from_node: str, to_node: str, args: AppendEntriesArgs) -> Optional[AppendEntriesReply]:
         now_ms = int(time.time() * 1000)
+        self.last_heartbeat_at[from_node] = now_ms
         connected = self.is_connected(from_node, to_node)
         dropped = not connected or (self.packet_loss_rate > 0 and random.random() < self.packet_loss_rate)
         is_heartbeat = len(args.entries) == 0
@@ -161,6 +167,7 @@ class InterceptedNetwork:
             self.emit_event(event_payload)
             return None
 
+        self.last_heartbeat_at[to_node] = now_ms
         try:
             reply = await target.handle_append_entries(args)
             event_payload["success"] = reply.success
@@ -169,6 +176,49 @@ class InterceptedNetwork:
             return reply
         except Exception as e:
             logger.error(f"Error handling AppendEntries at {to_node}: {e}")
+            return None
+
+    async def send_install_snapshot(self, from_node: str, to_node: str, args: InstallSnapshotArgs) -> Optional[InstallSnapshotReply]:
+        now_ms = int(time.time() * 1000)
+        connected = self.is_connected(from_node, to_node)
+        dropped = not connected or (self.packet_loss_rate > 0 and random.random() < self.packet_loss_rate)
+
+        event_payload = {
+            "type": "RPC_PULSE",
+            "timestamp_ms": now_ms,
+            "from_node": from_node,
+            "to_node": to_node,
+            "rpc_type": "InstallSnapshot",
+            "term": args.term,
+            "dropped": dropped,
+            "last_included_index": args.last_included_index,
+            "last_included_term": args.last_included_term,
+            "data_bytes": len(args.data),
+        }
+
+        if dropped:
+            event_payload["success"] = False
+            self.emit_event(event_payload)
+            return None
+
+        if self.latency_ms > 0:
+            await asyncio.sleep(self.latency_ms / 1000.0)
+
+        target = self.nodes.get(to_node)
+        if not target or to_node in self.stopped_nodes:
+            event_payload["success"] = False
+            event_payload["dropped"] = True
+            self.emit_event(event_payload)
+            return None
+
+        try:
+            reply = await target.handle_install_snapshot(args)
+            event_payload["success"] = True
+            event_payload["reply_term"] = reply.term
+            self.emit_event(event_payload)
+            return reply
+        except Exception as e:
+            logger.error(f"Error handling InstallSnapshot at {to_node}: {e}")
             return None
 
 
@@ -182,6 +232,9 @@ class InterceptedTransport(RaftTransport):
 
     async def send_append_entries(self, peer_id: str, args: AppendEntriesArgs) -> Optional[AppendEntriesReply]:
         return await self.network.send_append_entries(self.node_id, peer_id, args)
+
+    async def send_install_snapshot(self, peer_id: str, args: InstallSnapshotArgs) -> Optional[InstallSnapshotReply]:
+        return await self.network.send_install_snapshot(self.node_id, peer_id, args)
 
     async def close(self) -> None:
         pass
@@ -210,6 +263,7 @@ class ClusterController:
         # Downstream storage mock for fencing token demonstration
         self.mock_downstream_storage: Dict[str, Dict[str, Any]] = {}
         self.max_fencing_tokens_seen: Dict[str, int] = {}
+        self.lease_history: Dict[str, List[Dict[str, Any]]] = {}
 
         # Telemetry
         self.total_proposals: int = 0
@@ -253,6 +307,7 @@ class ClusterController:
                 heartbeat_interval_s=0.08,
             )
             node.on_apply_entry = sm.apply
+            node.on_restore_snapshot = sm.import_snapshot
 
             transport = InterceptedTransport(nid, self.network)
             node.set_transport(transport)
@@ -330,6 +385,9 @@ class ClusterController:
                 "commit_index": node.commit_index,
                 "last_applied": node.last_applied,
                 "log_length": node.log_storage.last_log_index,
+                "last_included_index": node.log_storage.last_included_index,
+                "last_included_term": node.log_storage.last_included_term,
+                "active_wal_entries": len(node.log_storage._entries),
                 "voted_for": node.voted_for,
                 "is_stopped": is_stopped,
                 "partition_group": part_idx,
@@ -398,6 +456,96 @@ class ClusterController:
             logs[nid] = entries
         return logs
 
+    def record_lease_event(
+        self,
+        key: str,
+        event_type: str,
+        owner_id: str,
+        fence_token: int,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Records an ordered event in the lease history store and broadcasts it."""
+        now_ms = int(time.time() * 1000)
+        events = self.lease_history.setdefault(key, [])
+        event = {
+            "event_id": len(events) + 1,
+            "event_type": event_type,
+            "key": key,
+            "owner_id": owner_id,
+            "fence_token": fence_token,
+            "timestamp_ms": now_ms,
+            "details": details or {},
+        }
+        events.append(event)
+        self._broadcast({
+            "type": "LEASE_EVENT",
+            "event": event,
+        })
+        return event
+
+    def get_lease_history(self, key: str) -> List[Dict[str, Any]]:
+        """Returns ordered event history for a lease key for the Git-tree Event Inspector."""
+        events = self.lease_history.get(key, [])
+        if not events:
+            # Check if active in state machine and synthesize root event
+            leader = self.get_leader()
+            source_sm = self.state_machines.get(leader.node_id) if leader else next(iter(self.state_machines.values()), None)
+            if source_sm and key in source_sm.locks:
+                rec = source_sm.locks[key]
+                return [{
+                    "event_id": 1,
+                    "event_type": "LEASE_ACQUIRED",
+                    "key": key,
+                    "owner_id": rec.owner,
+                    "fence_token": rec.fence_token,
+                    "timestamp_ms": rec.granted_at_ms,
+                    "details": {
+                        "expires_at_ms": rec.expires_at_ms,
+                        "initial_state": "ACTIVE",
+                    },
+                }]
+        return events
+
+    def get_nodes_summary(self) -> List[Dict[str, Any]]:
+        """Returns clean list of all nodes for GET /api/nodes."""
+        now_ms = int(time.time() * 1000)
+        summary = []
+        for nid, node in self.nodes.items():
+            is_stopped = nid in self.network.stopped_nodes
+            role_str = "offline" if is_stopped else node.role.name.lower()
+            last_hb = self.network.last_heartbeat_at.get(nid, now_ms)
+            summary.append({
+                "id": nid,
+                "role": role_str,
+                "current_term": node.current_term,
+                "commit_index": node.commit_index,
+                "last_heartbeat_at": last_hb,
+                "log_length": node.log_storage.last_log_index,
+            })
+        return summary
+
+    def get_leases_summary(self) -> List[Dict[str, Any]]:
+        """Returns clean list of active leases for GET /api/leases."""
+        now_ms = int(time.time() * 1000)
+        leader = self.get_leader()
+        source_sm = self.state_machines.get(leader.node_id) if leader else next(iter(self.state_machines.values()), None)
+        if not source_sm:
+            return []
+
+        leases = []
+        for key, rec in source_sm.locks.items():
+            rem_ttl = max(0, rec.expires_at_ms - now_ms)
+            leases.append({
+                "key": key,
+                "owner_id": rec.owner,
+                "fencing_token": rec.fence_token,
+                "acquired_at": rec.granted_at_ms,
+                "expires_at": rec.expires_at_ms,
+                "remaining_ttl_ms": rem_ttl,
+                "is_active": rec.is_active(now_ms),
+            })
+        return leases
+
     # =========================================================================
     # Lock Operations
     # =========================================================================
@@ -434,6 +582,19 @@ class ClusterController:
 
             if result.success:
                 self.successful_proposals += 1
+                self.record_lease_event(
+                    key=key,
+                    event_type="LEASE_ACQUIRED",
+                    owner_id=client_id,
+                    fence_token=result.fence_token,
+                    details={
+                        "ttl_ms": ttl_ms,
+                        "expires_at_ms": result.expires_at_ms,
+                        "node_id": leader.node_id,
+                        "commit_index": proposed_index,
+                        "term": leader.current_term,
+                    },
+                )
 
             self._broadcast({
                 "type": "LOCK_ACQUIRED" if result.success else "LOCK_BUSY",
@@ -476,6 +637,20 @@ class ClusterController:
 
             sm = self.state_machines[leader.node_id]
             result = sm.get_result(proposed_index)
+            if result and result.success:
+                self.record_lease_event(
+                    key=key,
+                    event_type="LEASE_RENEWED",
+                    owner_id=client_id,
+                    fence_token=result.fence_token,
+                    details={
+                        "ttl_ms": ttl_ms,
+                        "expires_at_ms": result.expires_at_ms,
+                        "node_id": leader.node_id,
+                        "commit_index": proposed_index,
+                        "term": leader.current_term,
+                    },
+                )
             return {
                 "success": result.success if result else False,
                 "status": result.status if result else "ERROR",
@@ -505,6 +680,18 @@ class ClusterController:
 
             sm = self.state_machines[leader.node_id]
             result = sm.get_result(proposed_index)
+            if result and result.success:
+                self.record_lease_event(
+                    key=key,
+                    event_type="LEASE_RELEASED",
+                    owner_id=client_id,
+                    fence_token=fence_token,
+                    details={
+                        "node_id": leader.node_id,
+                        "commit_index": proposed_index,
+                        "term": leader.current_term,
+                    },
+                )
             return {
                 "success": result.success if result else False,
                 "status": result.status if result else "ERROR",
@@ -696,3 +883,42 @@ class ClusterController:
             "token_beta": token_b,
             "steps": steps,
         }
+
+    async def take_snapshot(self, node_id: Optional[str] = None) -> Dict[str, Any]:
+        """Triggers state machine snapshot and WAL compaction on the specified node or leader."""
+        target = self.nodes.get(node_id) if node_id else self.get_leader()
+        if not target:
+            target = next((n for n in self.nodes.values() if n.node_id not in self.network.stopped_nodes), None)
+
+        if not target:
+            return {"success": False, "message": "No active nodes available to snapshot"}
+
+        sm = self.state_machines.get(target.node_id)
+        if not sm:
+            return {"success": False, "message": "State machine not found for target node"}
+
+        snap_bytes = sm.export_snapshot()
+        success = await target.take_snapshot(snap_bytes)
+
+        res = {
+            "success": success,
+            "node_id": target.node_id,
+            "last_included_index": target.log_storage.last_included_index,
+            "last_included_term": target.log_storage.last_included_term,
+            "active_wal_entries": len(target.log_storage._entries),
+            "message": (
+                f"Snapshot saved at index #{target.log_storage.last_included_index} and WAL compacted"
+                if success
+                else "No uncompacted entries available to snapshot"
+            ),
+        }
+
+        self._broadcast({
+            "type": "WAL_COMPACTED",
+            "data": res,
+        })
+        self._broadcast({
+            "type": "SNAPSHOT_CREATED",
+            "data": res,
+        })
+        return res

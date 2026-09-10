@@ -9,7 +9,7 @@ import grpc
 from quorum.proto import raft_pb2, raft_pb2_grpc
 from quorum.raft.node import RaftNode
 from quorum.raft.storage import LogEntry
-from quorum.raft.types import AppendEntriesArgs, RequestVoteArgs
+from quorum.raft.types import AppendEntriesArgs, InstallSnapshotArgs, RequestVoteArgs
 
 
 class RaftGrpcServicer(raft_pb2_grpc.RaftServiceServicer):
@@ -72,3 +72,17 @@ class RaftGrpcServicer(raft_pb2_grpc.RaftServiceServicer):
             match_index=reply.match_index,
             conflict_index=reply.conflict_index,
         )
+
+    async def InstallSnapshot(
+        self, request: raft_pb2.InstallSnapshotRequest, context: grpc.aio.ServicerContext
+    ) -> raft_pb2.InstallSnapshotResponse:
+        args = InstallSnapshotArgs(
+            term=request.term,
+            leader_id=request.leader_id,
+            last_included_index=request.last_included_index,
+            last_included_term=request.last_included_term,
+            data=request.data,
+            done=request.done,
+        )
+        reply = await self.node.handle_install_snapshot(args)
+        return raft_pb2.InstallSnapshotResponse(term=reply.term)

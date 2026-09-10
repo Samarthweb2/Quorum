@@ -7,6 +7,7 @@ and deterministic TTL expiration derived from log entry proposal timestamps.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Dict, Optional
 from quorum.raft.storage import LogEntry
@@ -155,3 +156,37 @@ class LockStateMachine:
         if lock and lock.is_active(current_time_ms):
             return lock
         return None
+
+    def export_snapshot(self) -> bytes:
+        """Serializes current active locks and token counter into bytes."""
+        state = {
+            "last_applied_index": self.last_applied_index,
+            "fencing_token_counter": self.fencing_token_counter,
+            "locks": {
+                k: {
+                    "key": v.key,
+                    "owner": v.owner,
+                    "fence_token": v.fence_token,
+                    "granted_at_ms": v.granted_at_ms,
+                    "expires_at_ms": v.expires_at_ms,
+                }
+                for k, v in self.locks.items()
+            },
+        }
+        return json.dumps(state).encode("utf-8")
+
+    def import_snapshot(self, data: bytes) -> None:
+        """Restores state machine from serialized snapshot bytes."""
+        state = json.loads(data.decode("utf-8"))
+        self.last_applied_index = state.get("last_applied_index", 0)
+        self.fencing_token_counter = state.get("fencing_token_counter", 0)
+        self.locks = {}
+        for k, v in state.get("locks", {}).items():
+            self.locks[k] = LockRecord(
+                key=v["key"],
+                owner=v["owner"],
+                fence_token=v["fence_token"],
+                granted_at_ms=v["granted_at_ms"],
+                expires_at_ms=v["expires_at_ms"],
+            )
+        self._results_cache.clear()

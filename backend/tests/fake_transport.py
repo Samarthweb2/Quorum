@@ -9,7 +9,14 @@ import asyncio
 from typing import Dict, Optional, Set, Tuple
 from quorum.raft.storage import LogEntry
 from quorum.raft.transport import RaftTransport
-from quorum.raft.types import AppendEntriesArgs, AppendEntriesReply, RequestVoteArgs, RequestVoteReply
+from quorum.raft.types import (
+    AppendEntriesArgs,
+    AppendEntriesReply,
+    InstallSnapshotArgs,
+    InstallSnapshotReply,
+    RequestVoteArgs,
+    RequestVoteReply,
+)
 
 
 class FakeNetwork:
@@ -90,6 +97,25 @@ class FakeNetwork:
         except (asyncio.TimeoutError, Exception):
             return None
 
+    async def route_install_snapshot(
+        self, from_node: str, to_node: str, args: InstallSnapshotArgs, timeout_s: float
+    ) -> Optional[InstallSnapshotReply]:
+        if self.is_blocked(from_node, to_node) or self.is_blocked(to_node, from_node):
+            return None
+
+        target = self._nodes.get(to_node)
+        if target is None or not target.is_running:
+            return None
+
+        if self.message_delay_s > 0:
+            await asyncio.sleep(self.message_delay_s)
+
+        try:
+            reply = await asyncio.wait_for(target.handle_install_snapshot(args), timeout=timeout_s)
+            return reply
+        except (asyncio.TimeoutError, Exception):
+            return None
+
 
 class FakeTransport(RaftTransport):
     """
@@ -109,6 +135,11 @@ class FakeTransport(RaftTransport):
         self, target_node_id: str, args: AppendEntriesArgs, timeout_s: float = 0.5
     ) -> Optional[AppendEntriesReply]:
         return await self.network.route_append_entries(self.node_id, target_node_id, args, timeout_s)
+
+    async def send_install_snapshot(
+        self, target_node_id: str, args: InstallSnapshotArgs, timeout_s: float = 2.0
+    ) -> Optional[InstallSnapshotReply]:
+        return await self.network.route_install_snapshot(self.node_id, target_node_id, args, timeout_s)
 
     async def close(self) -> None:
         self.network.unregister_node(self.node_id)

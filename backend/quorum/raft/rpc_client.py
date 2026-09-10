@@ -15,6 +15,8 @@ from quorum.raft.transport import RaftTransport
 from quorum.raft.types import (
     AppendEntriesArgs,
     AppendEntriesReply,
+    InstallSnapshotArgs,
+    InstallSnapshotReply,
     RequestVoteArgs,
     RequestVoteReply,
 )
@@ -106,6 +108,29 @@ class GrpcRaftTransport(RaftTransport):
             )
         except (grpc.RpcError, Exception) as e:
             logger.debug(f"[{self.node_id}] AppendEntries to {target_node_id} failed: {e}")
+            return None
+
+    async def send_install_snapshot(
+        self, target_node_id: str, args: InstallSnapshotArgs, timeout_s: float = 2.0
+    ) -> Optional[InstallSnapshotReply]:
+        stub = self._get_stub(target_node_id)
+        if not stub:
+            return None
+
+        req = raft_pb2.InstallSnapshotRequest(
+            term=args.term,
+            leader_id=args.leader_id,
+            last_included_index=args.last_included_index,
+            last_included_term=args.last_included_term,
+            data=args.data,
+            done=args.done,
+        )
+
+        try:
+            resp: raft_pb2.InstallSnapshotResponse = await stub.InstallSnapshot(req, timeout=timeout_s)
+            return InstallSnapshotReply(term=resp.term)
+        except (grpc.RpcError, Exception) as e:
+            logger.debug(f"[{self.node_id}] InstallSnapshot to {target_node_id} failed: {e}")
             return None
 
     async def close(self) -> None:

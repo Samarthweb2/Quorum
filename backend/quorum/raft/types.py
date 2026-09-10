@@ -47,3 +47,18 @@ class AppendEntriesReply:
     match_index: int = 0
     conflict_term: int = 0
     conflict_index: int = 0
+
+
+@dataclass
+class InstallSnapshotArgs:
+    term: int
+    leader_id: str
+    last_included_index: int
+    last_included_term: int
+    data: bytes
+    done: bool = True
+
+
+@dataclass
+class InstallSnapshotReply:
+    term: int

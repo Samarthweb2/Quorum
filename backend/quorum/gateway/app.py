@@ -103,6 +103,32 @@ class ReleaseLockReq(BaseModel):
     fence_token: int
 
 
+class AcquireLeaseReq(BaseModel):
+    key: str = Field(default="primary-db-writer")
+    owner_id: Optional[str] = None
+    client_id: Optional[str] = None
+    ttl_ms: int = Field(default=5000)
+
+
+class RenewLeaseReq(BaseModel):
+    owner_id: Optional[str] = None
+    client_id: Optional[str] = None
+    fence_token: Optional[int] = None
+    fencing_token: Optional[int] = None
+    ttl_ms: int = Field(default=5000)
+
+
+class ReleaseLeaseReq(BaseModel):
+    owner_id: Optional[str] = None
+    client_id: Optional[str] = None
+    fence_token: Optional[int] = None
+    fencing_token: Optional[int] = None
+
+
+class CompactWalReq(BaseModel):
+    node_id: Optional[str] = None
+
+
 class PartitionReq(BaseModel):
     partitions: List[List[str]] = Field(
         default=[["node-1", "node-2", "node-3"], ["node-4", "node-5"]],
@@ -112,6 +138,10 @@ class PartitionReq(BaseModel):
 
 class NodeActionReq(BaseModel):
     node_id: str
+
+
+class SnapshotReq(BaseModel):
+    node_id: Optional[str] = None
 
 
 class NetworkConditionReq(BaseModel):
@@ -126,6 +156,82 @@ class ZombieSimReq(BaseModel):
 # =============================================================================
 # REST Endpoints
 # =============================================================================
+
+@app.get("/api/nodes")
+async def get_nodes():
+    """Returns list of all nodes with id, role, current_term, commit_index, last_heartbeat_at, log_length."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    return controller.get_nodes_summary()
+
+
+@app.get("/api/leases")
+async def get_leases():
+    """Returns active leases with key, owner_id, fencing_token, acquired_at, expires_at, remaining_ttl_ms."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    return controller.get_leases_summary()
+
+
+@app.post("/api/leases/acquire")
+async def acquire_lease(req: AcquireLeaseReq):
+    """Acquires a distributed lease with monotonic fencing token."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    client_id = req.owner_id or req.client_id or "worker-alpha"
+    result = await controller.acquire_lock(req.key, client_id, req.ttl_ms)
+    return result
+
+
+@app.post("/api/leases/{key}/renew")
+async def renew_lease(key: str, req: RenewLeaseReq):
+    """Renews a lease TTL using client_id and fencing_token."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    client_id = req.owner_id or req.client_id or "worker-alpha"
+    token = req.fence_token if req.fence_token is not None else (req.fencing_token or 0)
+    result = await controller.renew_lock(key, client_id, token, req.ttl_ms)
+    return result
+
+
+@app.post("/api/leases/{key}/release")
+async def release_lease(key: str, req: ReleaseLeaseReq):
+    """Releases an active lease."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    client_id = req.owner_id or req.client_id or "worker-alpha"
+    token = req.fence_token if req.fence_token is not None else (req.fencing_token or 0)
+    result = await controller.release_lock(key, client_id, token)
+    return result
+
+
+@app.get("/api/leases/{key}/history")
+async def get_lease_history(key: str):
+    """Returns ordered event history for a given lease key."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    return controller.get_lease_history(key)
+
+
+@app.post("/api/admin/compact-wal")
+async def compact_wal(req: Optional[CompactWalReq] = None):
+    """Triggers Raft snapshot and real WAL prefix compaction."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    target_id = req.node_id if req and req.node_id else None
+    return await controller.take_snapshot(target_id)
+
+
+@app.post("/api/admin/simulate/zombie")
+async def simulate_zombie(req: Optional[ZombieSimReq] = None):
+    """Test harness simulation: demonstrates GC pause, lock expiry, and downstream storage fencing rejection."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    resource = req.resource_name if req else "production-orders-db"
+    res = await controller.simulate_zombie_worker(resource)
+    res["is_simulation"] = True
+    return res
+
 
 @app.get("/api/cluster/status")
 async def get_cluster_status():
@@ -207,6 +313,14 @@ async def simulate_zombie_worker(req: ZombieSimReq):
     return await controller.simulate_zombie_worker(req.resource_name)
 
 
+@app.post("/api/chaos/snapshot")
+async def trigger_snapshot(req: Optional[SnapshotReq] = None):
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    target_id = req.node_id if req and req.node_id else None
+    return await controller.take_snapshot(target_id)
+
+
 # =============================================================================
 # AI Agent Swarm Coordination Endpoints
 # =============================================================================
@@ -244,6 +358,7 @@ async def simulate_ai_coordination(req: AiSimReq):
 # =============================================================================
 
 @app.websocket("/ws")
+@app.websocket("/ws/events")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_websockets.add(websocket)

@@ -173,7 +173,10 @@ export default function App() {
         <div style={{ animation: 'fadeIn 0.3s ease-in-out' }}>
           <LandingPage
             status={status}
-            onLaunchDashboard={() => setView('dashboard')}
+            onLaunchDashboard={(tab = 'topology') => {
+              setView('dashboard');
+              if (tab) setActiveTab(tab);
+            }}
             onAcquireLock={handleAcquireLock}
             onSimulateZombie={handleSimulateZombie}
             onCreatePartition={handleCreatePartition}

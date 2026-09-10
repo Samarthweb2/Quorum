@@ -23,6 +23,8 @@ from quorum.raft.transport import RaftTransport
 from quorum.raft.types import (
     AppendEntriesArgs,
     AppendEntriesReply,
+    InstallSnapshotArgs,
+    InstallSnapshotReply,
     RequestVoteArgs,
     RequestVoteReply,
     Role,
@@ -75,6 +77,13 @@ class RaftNode:
         # State machine and commit waiters
         self._commit_waiters: Dict[int, asyncio.Future[bool]] = {}
         self.on_apply_entry: Optional[Callable[[LogEntry], None]] = None
+        self.on_restore_snapshot: Optional[Callable[[bytes], None]] = None
+
+        # Restore from snapshot if present on disk
+        snap_idx, snap_term, snap_data = self.log_storage.load_snapshot()
+        if snap_data is not None:
+            self.commit_index = max(self.commit_index, snap_idx)
+            self.last_applied = max(self.last_applied, snap_idx)
 
         # Concurrency & locks
         self._lock = asyncio.Lock()
@@ -378,8 +387,28 @@ class RaftNode:
 
         for peer in self.peers:
             prev_log_index = self.next_index.get(peer, self.log_storage.last_log_index + 1) - 1
+
+            # Raft §7: If follower lags behind compacted WAL prefix, stream snapshot!
+            if prev_log_index < self.log_storage.last_included_index:
+                snap_idx, snap_term, snap_data = self.log_storage.load_snapshot()
+                if snap_data is not None:
+                    snap_args = InstallSnapshotArgs(
+                        term=self.current_term,
+                        leader_id=self.node_id,
+                        last_included_index=snap_idx,
+                        last_included_term=snap_term,
+                        data=snap_data,
+                        done=True,
+                    )
+                    task = asyncio.create_task(self._send_install_snapshot_to_peer(peer, snap_args))
+                    self._heartbeat_tasks.add(task)
+                    task.add_done_callback(self._heartbeat_tasks.discard)
+                continue
+
             prev_log_term = 0
-            if prev_log_index > 0:
+            if prev_log_index == self.log_storage.last_included_index and prev_log_index > 0:
+                prev_log_term = self.log_storage.last_included_term
+            elif prev_log_index > 0:
                 entry = self.log_storage.get_entry(prev_log_index)
                 if entry:
                     prev_log_term = entry.term
@@ -398,6 +427,81 @@ class RaftNode:
             task = asyncio.create_task(self._send_append_entries_to_peer(peer, args))
             self._heartbeat_tasks.add(task)
             task.add_done_callback(self._heartbeat_tasks.discard)
+
+    async def _send_install_snapshot_to_peer(self, peer: str, args: InstallSnapshotArgs) -> None:
+        """Sends InstallSnapshot to a lagging peer and updates matchIndex/nextIndex."""
+        if not self.transport:
+            return
+        reply = await self.transport.send_install_snapshot(peer, args)
+        if reply is None:
+            return
+
+        async with self._lock:
+            if not self._running or self.role != Role.LEADER or self.current_term != args.term:
+                return
+
+            if reply.term > self.current_term:
+                logger.info(f"[{self.node_id}] InstallSnapshot to {peer} revealed higher term {reply.term}. Stepping down.")
+                await self._step_down(reply.term)
+                return
+
+            self.match_index[peer] = max(self.match_index.get(peer, 0), args.last_included_index)
+            self.next_index[peer] = self.match_index[peer] + 1
+            logger.info(f"[{self.node_id}] Installed snapshot to {peer}: match_index={self.match_index[peer]}")
+
+    async def handle_install_snapshot(self, args: InstallSnapshotArgs) -> InstallSnapshotReply:
+        """Handler for incoming InstallSnapshot RPC from leader."""
+        async with self._lock:
+            # 1. Reply immediately if term < currentTerm (§5.1)
+            if args.term < self.current_term:
+                return InstallSnapshotReply(term=self.current_term)
+
+            if args.term > self.current_term or self.role == Role.CANDIDATE:
+                await self._step_down(args.term, new_leader=args.leader_id)
+            else:
+                self.leader_id = args.leader_id
+                self.election_timer.reset()
+
+            # 2. Save snapshot to disk
+            self.log_storage.save_snapshot(args.last_included_index, args.last_included_term, args.data)
+
+            # 3. Restore state machine
+            if self.on_restore_snapshot:
+                try:
+                    self.on_restore_snapshot(args.data)
+                except Exception as e:
+                    logger.exception(f"[{self.node_id}] Error restoring state machine snapshot: {e}")
+
+            # 4. Compact log prefix up to last_included_index
+            self.log_storage.compact_prefix(args.last_included_index)
+
+            self.commit_index = max(self.commit_index, args.last_included_index)
+            self.last_applied = max(self.last_applied, args.last_included_index)
+            logger.info(f"[{self.node_id}] Successfully installed snapshot from {args.leader_id}: index={args.last_included_index}")
+
+            return InstallSnapshotReply(term=self.current_term)
+
+    async def take_snapshot(self, snapshot_bytes: bytes) -> bool:
+        """
+        Creates a snapshot up to self.last_applied and compacts the WAL.
+        """
+        async with self._lock:
+            if self.last_applied <= self.log_storage.last_included_index:
+                return False
+
+            last_idx = self.last_applied
+            last_term = 0
+            if last_idx == self.log_storage.last_included_index:
+                last_term = self.log_storage.last_included_term
+            else:
+                entry = self.log_storage.get_entry(last_idx)
+                if entry:
+                    last_term = entry.term
+
+            self.log_storage.save_snapshot(last_idx, last_term, snapshot_bytes)
+            self.log_storage.compact_prefix(last_idx)
+            logger.info(f"[{self.node_id}] Snapshot created at index {last_idx}, term {last_term}. WAL compacted.")
+            return True
 
     async def _send_append_entries_to_peer(self, peer: str, args: AppendEntriesArgs) -> None:
         """Sends AppendEntries to a single peer and processes reply."""

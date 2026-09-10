@@ -209,7 +209,7 @@ class ProtectedDatabase:
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
       {/* 1. Header Banner */}
-      <div className="card-temporal" style={{ padding: '24px 28px', background: 'linear-gradient(135deg, rgba(14, 18, 28, 0.95), rgba(20, 15, 38, 0.9))', borderColor: 'rgba(168, 85, 247, 0.25)', position: 'relative', overflow: 'hidden' }}>
+      <div className="bento-card" style={{ padding: '24px 28px', background: 'linear-gradient(135deg, rgba(14, 18, 28, 0.95), rgba(20, 15, 38, 0.9))', borderColor: 'rgba(168, 85, 247, 0.25)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '-60px', right: '-60px', width: '220px', height: '220px', background: 'radial-gradient(circle, rgba(168, 85, 247, 0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px', position: 'relative', zIndex: 2 }}>
@@ -221,7 +221,7 @@ class ProtectedDatabase:
               <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 600, color: '#ffffff', letterSpacing: '-0.02em' }}>
                 AI Agent Swarm Studio
               </h2>
-              <span className="temporal-badge" style={{ borderColor: 'rgba(168, 85, 247, 0.4)', color: '#c084fc', background: 'rgba(168, 85, 247, 0.1)' }}>
+              <span className="quorum-badge" style={{ borderColor: 'rgba(30, 138, 118, 0.3)', color: '#1E8A76', background: 'rgba(30, 138, 118, 0.12)' }}>
                 <Sparkles size={12} />
                 LANGCHAIN COMPATIBLE
               </span>
@@ -236,7 +236,7 @@ class ProtectedDatabase:
             <button
               onClick={() => handleRunScenario('safe')}
               disabled={isRunning}
-              className={`btn-temporal-outline ${scenario === 'safe' ? 'active' : ''}`}
+              className={`btn-quorum-outline ${scenario === 'safe' ? 'active' : ''}`}
               style={{
                 fontSize: '0.8rem',
                 padding: '8px 16px',
@@ -252,7 +252,7 @@ class ProtectedDatabase:
             <button
               onClick={() => handleRunScenario('zombie')}
               disabled={isRunning}
-              className={`btn-temporal-outline ${scenario === 'zombie' ? 'active' : ''}`}
+              className={`btn-quorum-outline ${scenario === 'zombie' ? 'active' : ''}`}
               style={{
                 fontSize: '0.8rem',
                 padding: '8px 16px',
@@ -268,7 +268,7 @@ class ProtectedDatabase:
             <button
               onClick={() => handleRunScenario('chaos')}
               disabled={isRunning}
-              className={`btn-temporal-outline ${scenario === 'chaos' ? 'active' : ''}`}
+              className={`btn-quorum-outline ${scenario === 'chaos' ? 'active' : ''}`}
               style={{
                 fontSize: '0.8rem',
                 padding: '8px 16px',
@@ -285,7 +285,7 @@ class ProtectedDatabase:
       </div>
 
       {/* 2. Central Shared Database / Resource State Bar */}
-      <div className="card-temporal" style={{ padding: '18px 24px', background: 'rgba(10, 14, 22, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+      <div className="bento-card" style={{ padding: '18px 24px', background: 'rgba(10, 14, 22, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '8px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
             <Database size={18} />
@@ -353,7 +353,7 @@ class ProtectedDatabase:
         
         {/* Agent Alpha */}
         <div 
-          className="card-temporal" 
+          className="bento-card" 
           style={{ 
             padding: '20px', 
             borderColor: agentStates['agent-alpha'].status === 'LOCK_GRANTED' ? '#38bdf8' : (agentStates['agent-alpha'].status === 'WRITE_REJECTED' ? '#ef4444' : 'rgba(255, 255, 255, 0.08)'),
@@ -387,7 +387,7 @@ class ProtectedDatabase:
 
         {/* Agent Beta */}
         <div 
-          className="card-temporal" 
+          className="bento-card" 
           style={{ 
             padding: '20px', 
             borderColor: agentStates['agent-beta'].status === 'LOCK_GRANTED' ? '#00f2aa' : 'rgba(255, 255, 255, 0.08)',
@@ -421,7 +421,7 @@ class ProtectedDatabase:
 
         {/* Agent Gamma */}
         <div 
-          className="card-temporal" 
+          className="bento-card" 
           style={{ 
             padding: '20px', 
             borderColor: agentStates['agent-gamma'].status === 'LOCK_GRANTED' ? '#c084fc' : 'rgba(255, 255, 255, 0.08)',
@@ -456,7 +456,7 @@ class ProtectedDatabase:
       </div>
 
       {/* 4. Live Multi-Agent Execution Stream / Timeline */}
-      <div className="card-temporal" style={{ padding: '24px', background: 'rgba(10, 13, 20, 0.95)' }}>
+      <div className="bento-card" style={{ padding: '24px', background: 'rgba(10, 13, 20, 0.95)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Terminal size={16} color="#00f2aa" />
@@ -471,7 +471,7 @@ class ProtectedDatabase:
             <button
               onClick={() => handleRunScenario(scenario)}
               disabled={isRunning}
-              className="btn-temporal-outline"
+              className="btn-quorum-outline"
               style={{ fontSize: '0.75rem', padding: '4px 12px' }}
             >
               <RotateCcw size={12} />
@@ -567,7 +567,7 @@ class ProtectedDatabase:
       </div>
 
       {/* 5. LangChain Integration Code Snippets */}
-      <div className="card-temporal" style={{ padding: '24px', background: 'rgba(8, 10, 16, 0.9)' }}>
+      <div className="bento-card" style={{ padding: '24px', background: 'rgba(8, 10, 16, 0.9)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Code2 size={16} color="#a855f7" />
@@ -631,7 +631,7 @@ class ProtectedDatabase:
                 setCopiedCode(true);
                 setTimeout(() => setCopiedCode(false), 2000);
               }}
-              className="btn-temporal-outline"
+              className="btn-quorum-outline"
               style={{ fontSize: '0.75rem', padding: '4px 10px' }}
             >
               {copiedCode ? <Check size={12} color="#00f2aa" /> : <Copy size={12} />}

@@ -148,7 +148,7 @@ class QuorumClient:
         self,
         servers: List[str],  # ["host1:port1", "host2:port2"]
         client_id: Optional[str] = None,
-        max_redirects: int = 5,
+        max_redirects: int = 10,
         base_backoff_s: float = 0.05,
         max_backoff_s: float = 0.5,
     ) -> None:

@@ -20,7 +20,7 @@ export default function Header({ status, wsConnected, activeTab, setActiveTab, o
     }
     if (health === 'HEALTHY') {
       return (
-        <div className="temporal-badge" style={{ padding: '5px 12px', fontSize: '0.75rem' }}>
+        <div className="quorum-badge" style={{ padding: '5px 12px', fontSize: '0.75rem' }}>
           <span className="radar-dot"></span>
           CLUSTER HEALTHY ({aliveNodes}/{totalNodes})
         </div>
@@ -54,22 +54,22 @@ export default function Header({ status, wsConnected, activeTab, setActiveTab, o
             title="Return to Landing Page"
           >
             <svg 
-              width={26} 
-              height={26} 
+              width={28} 
+              height={28} 
               viewBox="0 0 100 100" 
               fill="none" 
               xmlns="http://www.w3.org/2000/svg"
               style={{ flexShrink: 0 }}
             >
-              <defs>
-                <linearGradient id="headerQuorumOrangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#fbbf24" />
-                  <stop offset="100%" stopColor="#f59e0b" />
-                </linearGradient>
-              </defs>
-              <path d="M50 16L84 34L50 52L16 34Z" fill="url(#headerQuorumOrangeGrad)" />
-              <path d="M16 48L50 66L84 48L50 56Z" fill="url(#headerQuorumOrangeGrad)" />
-              <path d="M16 64L50 82L84 64L50 72Z" fill="url(#headerQuorumOrangeGrad)" />
+              <circle cx="50" cy="22" r="14" fill="#0284C7" />
+              <circle cx="22" cy="74" r="14" fill="#00B7C5" />
+              <circle cx="78" cy="74" r="14" fill="#00B7C5" />
+              <line x1="50" y1="22" x2="22" y2="74" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+              <line x1="50" y1="22" x2="78" y2="74" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+              <line x1="22" y1="74" x2="78" y2="74" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+              <circle cx="50" cy="22" r="6" fill="#0F172A" />
+              <circle cx="22" cy="74" r="6" fill="#0F172A" />
+              <circle cx="78" cy="74" r="6" fill="#0F172A" />
             </svg>
             <span style={{ fontSize: '21px', fontWeight: 400, letterSpacing: '-0.02em', color: '#ffffff' }}>
               Quorum
@@ -78,7 +78,7 @@ export default function Header({ status, wsConnected, activeTab, setActiveTab, o
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.65rem', background: 'rgba(124, 92, 252, 0.15)', color: '#c4b5fd', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(124, 92, 252, 0.3)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+              <span style={{ fontSize: '0.65rem', background: 'rgba(2, 132, 199, 0.15)', color: '#0284C7', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(2, 132, 199, 0.3)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                 CONTROL PLANE
               </span>
             </div>
@@ -86,7 +86,7 @@ export default function Header({ status, wsConnected, activeTab, setActiveTab, o
           {onBackToLanding && (
             <button
               onClick={onBackToLanding}
-              className="btn-temporal-outline"
+              className="btn-quorum-outline"
               style={{ fontSize: '0.75rem', padding: '6px 14px', marginLeft: '12px' }}
             >
               ← Landing Page
@@ -123,8 +123,8 @@ export default function Header({ status, wsConnected, activeTab, setActiveTab, o
           {/* Zombie Simulator Quick Trigger */}
           <button 
             onClick={onSimulateZombie}
-            className="btn-temporal-ghost"
-            style={{ fontSize: '0.75rem', padding: '6px 14px', borderColor: 'rgba(168, 85, 247, 0.4)', color: '#c084fc' }}
+            className="btn-quorum-ghost"
+            style={{ fontSize: '0.75rem', padding: '6px 14px', borderColor: 'rgba(2, 132, 199, 0.4)', color: '#0284C7' }}
             title="Demonstrate Fencing Token protection against zombie workers"
           >
             <Shield size={14} />
@@ -180,11 +180,11 @@ export default function Header({ status, wsConnected, activeTab, setActiveTab, o
         <button 
           className={`tab-btn ${activeTab === 'ai-agents' ? 'active' : ''}`}
           onClick={() => setActiveTab('ai-agents')}
-          style={{ color: activeTab === 'ai-agents' ? '#c084fc' : '#94a3b8', borderBottomColor: activeTab === 'ai-agents' ? '#c084fc' : 'transparent' }}
+          style={{ color: activeTab === 'ai-agents' ? '#0284C7' : '#94a3b8', borderBottomColor: activeTab === 'ai-agents' ? '#0284C7' : 'transparent' }}
         >
           <Bot size={16} />
           AI Agent Swarm
-          <span style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', fontSize: '0.7rem', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>
+          <span style={{ background: 'rgba(2, 132, 199, 0.2)', color: '#0284C7', fontSize: '0.7rem', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>
             3 Agents
           </span>
         </button>

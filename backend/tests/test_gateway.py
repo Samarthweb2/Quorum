@@ -110,3 +110,103 @@ async def test_gateway_zombie_worker_simulation(client: AsyncClient):
     assert len(data["steps"]) == 6
     # Step 6 must be WRITE_REJECTED (fencing token verification)
     assert data["steps"][5]["status"] == "WRITE_REJECTED"
+
+
+@pytest.mark.asyncio
+async def test_gateway_nodes_summary(client: AsyncClient):
+    res = await client.get("/api/nodes")
+    assert res.status_code == 200
+    nodes = res.json()
+    assert len(nodes) == 5
+    for node in nodes:
+        assert "id" in node
+        assert "role" in node
+        assert node["role"] in ("leader", "follower", "candidate", "offline")
+        assert "current_term" in node
+        assert "commit_index" in node
+        assert "last_heartbeat_at" in node
+        assert "log_length" in node
+
+
+@pytest.mark.asyncio
+async def test_gateway_leases_api_and_history(client: AsyncClient):
+    # 1. Acquire Lease
+    key = "lease-api-test"
+    acq_res = await client.post("/api/leases/acquire", json={
+        "key": key,
+        "owner_id": "test-owner-7",
+        "ttl_ms": 6000,
+    })
+    assert acq_res.status_code == 200
+    acq_data = acq_res.json()
+    assert acq_data["success"] is True
+    token = acq_data["fence_token"]
+    assert token >= 1
+
+    # 2. Get Leases
+    leases_res = await client.get("/api/leases")
+    assert leases_res.status_code == 200
+    leases = leases_res.json()
+    matching = [l for l in leases if l["key"] == key]
+    assert len(matching) == 1
+    assert matching[0]["owner_id"] == "test-owner-7"
+    assert matching[0]["fencing_token"] == token
+    assert matching[0]["is_active"] is True
+
+    # 3. Get Lease History
+    hist_res = await client.get(f"/api/leases/{key}/history")
+    assert hist_res.status_code == 200
+    hist = hist_res.json()
+    assert len(hist) >= 1
+    assert hist[0]["event_type"] == "LEASE_ACQUIRED"
+    assert hist[0]["fence_token"] == token
+
+    # 4. Renew Lease
+    renew_res = await client.post(f"/api/leases/{key}/renew", json={
+        "owner_id": "test-owner-7",
+        "fence_token": token,
+        "ttl_ms": 10000,
+    })
+    assert renew_res.status_code == 200
+    assert renew_res.json()["success"] is True
+
+    # Check history after renew
+    hist_res2 = await client.get(f"/api/leases/{key}/history")
+    hist2 = hist_res2.json()
+    assert len(hist2) >= 2
+    assert hist2[-1]["event_type"] == "LEASE_RENEWED"
+
+    # 5. Release Lease
+    rel_res = await client.post(f"/api/leases/{key}/release", json={
+        "owner_id": "test-owner-7",
+        "fence_token": token,
+    })
+    assert rel_res.status_code == 200
+    assert rel_res.json()["success"] is True
+
+    # Check history after release
+    hist_res3 = await client.get(f"/api/leases/{key}/history")
+    hist3 = hist_res3.json()
+    assert len(hist3) >= 3
+    assert hist3[-1]["event_type"] == "LEASE_RELEASED"
+
+
+@pytest.mark.asyncio
+async def test_gateway_admin_compact_wal(client: AsyncClient):
+    res = await client.post("/api/admin/compact-wal")
+    assert res.status_code == 200
+    data = res.json()
+    assert "success" in data
+    assert "node_id" in data
+    assert "last_included_index" in data
+
+
+@pytest.mark.asyncio
+async def test_gateway_admin_simulate_zombie(client: AsyncClient):
+    res = await client.post("/api/admin/simulate/zombie", json={"resource_name": "inventory-db"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["is_simulation"] is True
+    assert data["success"] is True
+    assert len(data["steps"]) == 6
+
