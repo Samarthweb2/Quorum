@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
-export default function ZombieSimModal({ isOpen, onClose, simulationResult, onRunAgain }) {
+export default function ZombieSimModal({ isOpen, onClose, simulationResult, onRunAgain, onOpenPlayground }) {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
 
   useEffect(() => {
@@ -116,14 +116,14 @@ export default function ZombieSimModal({ isOpen, onClose, simulationResult, onRu
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                     <strong style={{ fontSize: '0.85rem', color: '#f1f5f9' }}>
-                      Step {step.step}: {step.worker}
+                      Step {step.step}: {step.worker || step.agent_name}
                     </strong>
                     <span style={{ fontSize: '0.7rem', fontFamily: 'var(--font-mono)', color: isRejected ? '#f87171' : '#38bdf8', fontWeight: 700 }}>
                       {step.status}
                     </span>
                   </div>
                   <p style={{ fontSize: '0.8rem', color: isRejected ? '#fca5a5' : '#cbd5e1', lineHeight: '1.4' }}>
-                    {step.description}
+                    {step.description || step.thought || step.action}
                   </p>
                 </div>
               </div>
@@ -138,6 +138,15 @@ export default function ZombieSimModal({ isOpen, onClose, simulationResult, onRu
             Data Invariant Preserved (Zero Split-Brain Corruption)
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
+            {onOpenPlayground && (
+              <button
+                className="btn-quorum-outline"
+                style={{ fontSize: '0.75rem', padding: '6px 12px' }}
+                onClick={onOpenPlayground}
+              >
+                Terminal Playground →
+              </button>
+            )}
             <button className="btn-secondary" onClick={onRunAgain}>
               Run Again
             </button>

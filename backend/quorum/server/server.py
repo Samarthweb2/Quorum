@@ -15,10 +15,13 @@ from pathlib import Path
 from typing import Dict, List, Optional
 import grpc
 
-from quorum.proto import quorum_pb2_grpc, raft_pb2_grpc
+from quorum.proto import lock_service_pb2_grpc, quorum_pb2_grpc, raft_pb2_grpc
 from quorum.raft.node import RaftNode
 from quorum.raft.rpc_client import GrpcRaftTransport
+from quorum.raft.types import Role
 from quorum.server.client_service import QuorumGrpcServicer
+from quorum.server.lock_service_impl import LockServiceImpl
+from quorum.server.promotion_hub import PromotionEvent, PromotionHub
 from quorum.server.raft_service import RaftGrpcServicer
 from quorum.state_machine.lock_manager import LockStateMachine
 
@@ -53,6 +56,31 @@ class QuorumServer:
 
         # State Machine & Raft Core
         self.state_machine = LockStateMachine()
+        self.promotion_hub = PromotionHub()
+
+        def _on_apply_entry(entry):
+            result = self.state_machine.apply(entry)
+            if result and result.status in ("RELEASED_AND_PROMOTED", "EXPIRED_AND_PROMOTED"):
+                event = PromotionEvent(
+                    key=result.key or (entry.data.get("key", "") if entry.data else ""),
+                    client_id=result.promoted_owner,
+                    fence_token=result.fence_token,
+                    ttl_ms=result.ttl_ms,
+                    expires_at_ms=result.expires_at_ms,
+                )
+                try:
+                    asyncio.create_task(self.promotion_hub.notify_promotion(event))
+                except RuntimeError:
+                    pass
+            return result
+
+        def _on_leadership_change(role, leader_id, term):
+            if role != Role.LEADER:
+                try:
+                    asyncio.create_task(self.promotion_hub.notify_leadership_lost())
+                except RuntimeError:
+                    pass
+
         self.transport = GrpcRaftTransport(self.node_id, self.peer_addresses)
         self.node = RaftNode(
             node_id=self.node_id,
@@ -62,6 +90,9 @@ class QuorumServer:
             min_election_timeout_s=min_election_timeout_s,
             max_election_timeout_s=max_election_timeout_s,
             heartbeat_interval_s=heartbeat_interval_s,
+            on_apply_entry=_on_apply_entry,
+            on_restore_snapshot=self.state_machine.import_snapshot,
+            on_leadership_change=_on_leadership_change,
         )
 
         # gRPC Server
@@ -75,6 +106,14 @@ class QuorumServer:
                 state_machine=self.state_machine,
                 peer_client_addresses=self.peer_addresses,
                 self_client_address=self.self_client_address,
+            ),
+            self.grpc_server,
+        )
+        lock_service_pb2_grpc.add_LockServiceServicer_to_server(
+            LockServiceImpl(
+                raft_node=self.node,
+                promotion_hub=self.promotion_hub,
+                state_machine=self.state_machine,
             ),
             self.grpc_server,
         )

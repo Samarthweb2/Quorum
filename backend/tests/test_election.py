@@ -265,7 +265,11 @@ async def test_five_node_cluster_election(tmp_path: Path, fake_network: FakeNetw
         await node.start()
 
     try:
-        await asyncio.sleep(0.06)
+        for _ in range(20):
+            if nodes["node-1"].role == Role.LEADER and all(nodes[f"node-{i}"].leader_id == "node-1" for i in range(2, 6)):
+                break
+            await asyncio.sleep(0.01)
+
         assert nodes["node-1"].role == Role.LEADER
         assert nodes["node-1"].current_term == 1
         for i in range(2, 6):

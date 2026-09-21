@@ -210,3 +210,143 @@ async def test_gateway_admin_simulate_zombie(client: AsyncClient):
     assert data["success"] is True
     assert len(data["steps"]) == 6
 
+
+@pytest.mark.asyncio
+async def test_gateway_get_locks_api_symmetry(client: AsyncClient):
+    # 1. Acquire via /api/locks/acquire
+    res = await client.post("/api/locks/acquire", json={
+        "key": "symmetry-lock",
+        "client_id": "client-sym",
+        "ttl_ms": 5000,
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    # Verify dual fencing token fields
+    assert "fence_token" in data
+    assert "fencing_token" in data
+    assert data["fence_token"] == data["fencing_token"]
+
+    # 2. Query via GET /api/locks alias
+    locks_res = await client.get("/api/locks")
+    assert locks_res.status_code == 200
+    locks = locks_res.json()
+    assert any(l["key"] == "symmetry-lock" for l in locks)
+
+    # 3. Query history via GET /api/locks/{key}/history alias
+    hist_res = await client.get("/api/locks/symmetry-lock/history")
+    assert hist_res.status_code == 200
+    assert len(hist_res.json()) >= 1
+
+    # Cleanup
+    await client.post("/api/locks/release", json={
+        "key": "symmetry-lock",
+        "client_id": "client-sym",
+        "fence_token": data["fence_token"],
+    })
+
+
+@pytest.mark.asyncio
+async def test_gateway_active_locks_filters_expired(client: AsyncClient):
+    # Acquire a very short TTL lock
+    res = await client.post("/api/locks/acquire", json={
+        "key": "fast-expiring-lock",
+        "client_id": "ephemeral-client",
+        "ttl_ms": 150,
+    })
+    assert res.status_code == 200
+    assert res.json()["success"] is True
+
+    # Immediately check: should be in active_locks
+    stat1 = await client.get("/api/cluster/status")
+    active1 = stat1.json()["active_locks"]
+    assert any(l["key"] == "fast-expiring-lock" for l in active1)
+
+    # Wait for lease to expire
+    await asyncio.sleep(0.25)
+
+    # After expiration: must NOT appear in active_locks or GET /api/leases
+    stat2 = await client.get("/api/cluster/status")
+    active2 = stat2.json()["active_locks"]
+    assert not any(l["key"] == "fast-expiring-lock" for l in active2)
+
+    leases_res = await client.get("/api/leases")
+    leases = leases_res.json()
+    assert not any(l["key"] == "fast-expiring-lock" for l in leases)
+
+
+@pytest.mark.asyncio
+async def test_zombie_simulation_follower_state_machine_consistency(client: AsyncClient):
+    # Run zombie simulation
+    sim_res = await client.post("/api/chaos/simulate-zombie", json={"resource_name": "consistency-check-db"})
+    assert sim_res.status_code == 200
+    assert sim_res.json()["success"] is True
+
+    # Wait briefly for replication of releases/state machine updates
+    await asyncio.sleep(0.15)
+
+    # Verify that all alive nodes' state machines are synchronized and do not diverge
+    leader_sm = app_module.controller.state_machines[app_module.controller.get_leader().node_id]
+    for nid, sm in app_module.controller.state_machines.items():
+        # Fencing token counters must be in agreement
+        assert sm.fencing_token_counter == leader_sm.fencing_token_counter
+
+
+@pytest.mark.asyncio
+async def test_gateway_lock_wait_queue_and_linearizable_read(client: AsyncClient):
+    # 1. Worker Alpha acquires contested-res
+    acq1 = await client.post("/api/leases/acquire", json={
+        "key": "contested-res",
+        "client_id": "worker-alpha",
+        "ttl_ms": 5000,
+    })
+    assert acq1.status_code == 200
+    token1 = acq1.json()["fence_token"]
+    assert token1 > 0
+
+    # 2. Worker Beta requests with wait_if_busy=True
+    acq2 = await client.post("/api/leases/acquire", json={
+        "key": "contested-res",
+        "client_id": "worker-beta",
+        "ttl_ms": 4000,
+        "wait_if_busy": True,
+        "wait_timeout_ms": 15000,
+    })
+    assert acq2.status_code == 200
+    res2 = acq2.json()
+    assert res2["status"] == "QUEUED"
+    assert res2["queue_position"] == 1
+
+    # 3. Check queue endpoint
+    q_res = await client.get("/api/leases/contested-res/queue")
+    assert q_res.status_code == 200
+    q_data = q_res.json()["queue"]
+    assert len(q_data) == 1
+    assert q_data[0]["client_id"] == "worker-beta"
+
+    # 4. Check linearizable read endpoint
+    lin_res = await client.get("/api/leases/contested-res/linearizable")
+    assert lin_res.status_code == 200
+    lin_data = lin_res.json()
+    assert lin_data["success"] is True
+    assert lin_data["is_locked"] is True
+    assert lin_data["owner"] == "worker-alpha"
+    assert lin_data["wait_queue_length"] == 1
+
+    # 5. Worker Alpha releases -> Worker Beta auto-promoted
+    rel1 = await client.post("/api/leases/contested-res/release", json={
+        "client_id": "worker-alpha",
+        "fence_token": token1,
+    })
+    assert rel1.status_code == 200
+    rel1_data = rel1.json()
+    assert rel1_data["status"] == "RELEASED_AND_PROMOTED"
+    assert rel1_data["promoted_owner"] == "worker-beta"
+    assert rel1_data["fence_token"] > token1
+
+    # 6. Verify via linearizable read that Beta is now the owner
+    lin2 = await client.get("/api/leases/contested-res/linearizable")
+    assert lin2.json()["owner"] == "worker-beta"
+
+
+

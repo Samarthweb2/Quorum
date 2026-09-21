@@ -926,7 +926,7 @@ export default function LandingPage({
               <form onSubmit={(e) => {
                 e.preventDefault();
                 setIsLoginOpen(false);
-                onLaunchDashboard('topology');
+                onLaunchDashboard('cluster');
               }}>
                 <div style={{ marginBottom: '14px' }}>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#231044', marginBottom: '6px' }}>
@@ -962,9 +962,39 @@ export default function LandingPage({
               </form>
             </div>
           </div>
-        </div>
+    </div>
       )}
+
+      {/* Footer */}
+      <footer className="landing-footer">
+        <div className="landing-footer__inner">
+          <div className="landing-footer__brand">
+            <svg width={24} height={24} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="50" cy="22" r="14" fill="#0284C7" />
+              <circle cx="22" cy="74" r="14" fill="#00B7C5" />
+              <circle cx="78" cy="74" r="14" fill="#00B7C5" />
+              <line x1="50" y1="22" x2="22" y2="74" stroke="#F1F5F9" strokeWidth="5" strokeLinecap="round" />
+              <line x1="50" y1="22" x2="78" y2="74" stroke="#F1F5F9" strokeWidth="5" strokeLinecap="round" />
+              <line x1="22" y1="74" x2="78" y2="74" stroke="#F1F5F9" strokeWidth="5" strokeLinecap="round" />
+              <circle cx="50" cy="22" r="6" fill="#0F172A" />
+              <circle cx="22" cy="74" r="6" fill="#0F172A" />
+              <circle cx="78" cy="74" r="6" fill="#0F172A" />
+            </svg>
+            <span>Quorum</span>
+          </div>
+          <div className="landing-footer__links">
+            <a href="https://github.com/Samarthweb2/Quorum" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); onLaunchDashboard && onLaunchDashboard('cluster'); }}>Cluster & Nodes</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); onLaunchDashboard && onLaunchDashboard('locks'); }}>Locks & Queues</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); onLaunchDashboard && onLaunchDashboard('zombie'); }}>Zombie Lab</a>
+          </div>
+          <div className="landing-footer__copy">
+            MIT License · Built with Raft Consensus
+          </div>
+        </div>
+      </footer>
 
     </div>
   );
 }
+

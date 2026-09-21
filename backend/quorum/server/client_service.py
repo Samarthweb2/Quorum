@@ -37,8 +37,9 @@ class QuorumGrpcServicer(quorum_pb2_grpc.QuorumServiceServicer):
         self.self_client_address = self_client_address
         self._watchers: Set[asyncio.Queue[quorum_pb2.LeaderNotification]] = set()
 
-        # Wire node's apply callback to our state machine
+        # Wire node's apply and snapshot callbacks to our state machine
         self.node.on_apply_entry = self.state_machine.apply
+        self.node.on_restore_snapshot = self.state_machine.import_snapshot
 
         # Hook leadership changes
         self._prev_on_leadership_change = self.node.on_leadership_change
@@ -84,6 +85,8 @@ class QuorumGrpcServicer(quorum_pb2_grpc.QuorumServiceServicer):
             "key": request.key,
             "client_id": request.client_id,
             "ttl_ms": request.ttl_ms,
+            "wait_if_busy": getattr(request, "wait_if_busy", False),
+            "wait_timeout_ms": getattr(request, "wait_timeout_ms", 60000),
         }
 
         try:
@@ -106,7 +109,13 @@ class QuorumGrpcServicer(quorum_pb2_grpc.QuorumServiceServicer):
                     message="Internal error retrieving state machine result",
                 )
 
-            status = quorum_pb2.LOCK_ACQUIRED if result.success else quorum_pb2.LOCK_BUSY
+            if result.status == "QUEUED":
+                status = quorum_pb2.LOCK_QUEUED
+            elif result.success:
+                status = quorum_pb2.LOCK_ACQUIRED
+            else:
+                status = quorum_pb2.LOCK_BUSY
+
             return quorum_pb2.AcquireLockResponse(
                 status=status,
                 fence_token=result.fence_token,
@@ -114,6 +123,7 @@ class QuorumGrpcServicer(quorum_pb2_grpc.QuorumServiceServicer):
                 leader_id=self.node.node_id,
                 leader_address=self.self_client_address,
                 message=result.message,
+                queue_position=result.queue_position,
             )
 
         except asyncio.TimeoutError:
@@ -237,9 +247,26 @@ class QuorumGrpcServicer(quorum_pb2_grpc.QuorumServiceServicer):
     async def GetLock(
         self, request: quorum_pb2.GetLockRequest, context: grpc.aio.ServicerContext
     ) -> quorum_pb2.GetLockResponse:
+        leader_addr = self._get_leader_address()
+        if getattr(request, "linearizable", False):
+            if self.node.role != Role.LEADER:
+                return quorum_pb2.GetLockResponse(
+                    is_locked=False,
+                    owner="",
+                    fence_token=0,
+                    remaining_ttl_ms=0,
+                    leader_id=self.node.leader_id or "",
+                    leader_address=leader_addr,
+                    wait_queue_length=0,
+                )
+            try:
+                await self.node.read_index(timeout_s=2.0)
+            except Exception as e:
+                context.abort(grpc.StatusCode.UNAVAILABLE, f"Linearizable read failed: {e}")
+
         now_ms = int(time.time() * 1000)
         lock = self.state_machine.get_lock(request.key, now_ms)
-        leader_addr = self._get_leader_address()
+        queue_len = len(self.state_machine.get_wait_queue(request.key))
 
         if lock:
             remaining = max(0, lock.expires_at_ms - now_ms)
@@ -250,6 +277,7 @@ class QuorumGrpcServicer(quorum_pb2_grpc.QuorumServiceServicer):
                 remaining_ttl_ms=remaining,
                 leader_id=self.node.leader_id or (self.node.node_id if self.node.role == Role.LEADER else ""),
                 leader_address=leader_addr,
+                wait_queue_length=queue_len,
             )
         return quorum_pb2.GetLockResponse(
             is_locked=False,
@@ -258,6 +286,7 @@ class QuorumGrpcServicer(quorum_pb2_grpc.QuorumServiceServicer):
             remaining_ttl_ms=0,
             leader_id=self.node.leader_id or (self.node.node_id if self.node.role == Role.LEADER else ""),
             leader_address=leader_addr,
+            wait_queue_length=queue_len,
         )
 
     async def WatchLeader(

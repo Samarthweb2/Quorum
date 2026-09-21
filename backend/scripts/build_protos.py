@@ -41,9 +41,12 @@ def build_protos() -> None:
         content = py_file.read_text(encoding="utf-8")
         for proto in proto_files:
             stem = proto.stem
-            pattern = rf"^import {stem}_pb2 as {stem}__pb2"
-            replacement = f"from quorum.proto import {stem}_pb2 as {stem}__pb2"
+            pattern = rf"^import ({stem}_pb2) as (.*)"
+            replacement = r"from quorum.proto import \1 as \2"
             content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
+            pattern_direct = rf"^import ({stem}_pb2)$"
+            replacement_direct = r"from quorum.proto import \1"
+            content = re.sub(pattern_direct, replacement_direct, content, flags=re.MULTILINE)
         py_file.write_text(content, encoding="utf-8")
 
     print("Protobuf compilation completed successfully.")

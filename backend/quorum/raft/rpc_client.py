@@ -59,6 +59,7 @@ class GrpcRaftTransport(RaftTransport):
             candidate_id=args.candidate_id,
             last_log_index=args.last_log_index,
             last_log_term=args.last_log_term,
+            is_pre_vote=args.is_pre_vote,
         )
 
         try:

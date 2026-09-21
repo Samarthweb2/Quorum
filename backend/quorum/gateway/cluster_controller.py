@@ -227,13 +227,13 @@ class InterceptedTransport(RaftTransport):
         self.node_id = node_id
         self.network = network
 
-    async def send_request_vote(self, peer_id: str, args: RequestVoteArgs) -> Optional[RequestVoteReply]:
+    async def send_request_vote(self, peer_id: str, args: RequestVoteArgs, timeout_s: float = 0.5) -> Optional[RequestVoteReply]:
         return await self.network.send_request_vote(self.node_id, peer_id, args)
 
-    async def send_append_entries(self, peer_id: str, args: AppendEntriesArgs) -> Optional[AppendEntriesReply]:
+    async def send_append_entries(self, peer_id: str, args: AppendEntriesArgs, timeout_s: float = 0.5) -> Optional[AppendEntriesReply]:
         return await self.network.send_append_entries(self.node_id, peer_id, args)
 
-    async def send_install_snapshot(self, peer_id: str, args: InstallSnapshotArgs) -> Optional[InstallSnapshotReply]:
+    async def send_install_snapshot(self, peer_id: str, args: InstallSnapshotArgs, timeout_s: float = 5.0) -> Optional[InstallSnapshotReply]:
         return await self.network.send_install_snapshot(self.node_id, peer_id, args)
 
     async def close(self) -> None:
@@ -391,6 +391,9 @@ class ClusterController:
                 "voted_for": node.voted_for,
                 "is_stopped": is_stopped,
                 "partition_group": part_idx,
+                "leader_lease_active": getattr(node, "is_leader_lease_valid", False),
+                "leader_lease_remaining_ms": int(getattr(node, "leader_lease_remaining_s", 0.0) * 1000),
+                "zero_rtt_reads_count": getattr(node, "zero_rtt_reads_count", 0),
             })
 
         # Gather active locks from leader's state machine or the latest available state machine
@@ -399,15 +402,19 @@ class ClusterController:
 
         if source_sm:
             for key, rec in source_sm.locks.items():
+                if not rec.is_active(now_ms):
+                    continue
                 rem_ttl = max(0, rec.expires_at_ms - now_ms)
                 active_locks.append({
                     "key": key,
                     "owner": rec.owner,
                     "fence_token": rec.fence_token,
+                    "fencing_token": rec.fence_token,
                     "granted_at_ms": rec.granted_at_ms,
                     "expires_at_ms": rec.expires_at_ms,
                     "remaining_ttl_ms": rem_ttl,
-                    "is_active": rec.is_active(now_ms),
+                    "is_active": True,
+                    "wait_queue": source_sm.get_wait_queue(key),
                 })
 
         # Calculate cluster health
@@ -433,6 +440,7 @@ class ClusterController:
             "latency_ms": self.network.latency_ms,
             "nodes": node_statuses,
             "active_locks": active_locks,
+            "wait_queues": {k: source_sm.get_wait_queue(k) for k, q in source_sm.wait_queues.items() if q} if source_sm else {},
             "total_proposals": self.total_proposals,
             "successful_proposals": self.successful_proposals,
             "timestamp_ms": now_ms,
@@ -534,15 +542,18 @@ class ClusterController:
 
         leases = []
         for key, rec in source_sm.locks.items():
+            if not rec.is_active(now_ms):
+                continue
             rem_ttl = max(0, rec.expires_at_ms - now_ms)
             leases.append({
                 "key": key,
                 "owner_id": rec.owner,
+                "fence_token": rec.fence_token,
                 "fencing_token": rec.fence_token,
                 "acquired_at": rec.granted_at_ms,
                 "expires_at": rec.expires_at_ms,
                 "remaining_ttl_ms": rem_ttl,
-                "is_active": rec.is_active(now_ms),
+                "is_active": True,
             })
         return leases
 
@@ -550,7 +561,9 @@ class ClusterController:
     # Lock Operations
     # =========================================================================
 
-    async def acquire_lock(self, key: str, client_id: str, ttl_ms: int = 5000) -> Dict[str, Any]:
+    async def acquire_lock(
+        self, key: str, client_id: str, ttl_ms: int = 5000, wait_if_busy: bool = False, wait_timeout_ms: int = 60000
+    ) -> Dict[str, Any]:
         self.total_proposals += 1
         leader = self.get_leader()
         if not leader:
@@ -561,7 +574,13 @@ class ClusterController:
             }
 
         now_ms = int(time.time() * 1000)
-        data = {"key": key, "client_id": client_id, "ttl_ms": ttl_ms}
+        data = {
+            "key": key,
+            "client_id": client_id,
+            "ttl_ms": ttl_ms,
+            "wait_if_busy": wait_if_busy,
+            "wait_timeout_ms": wait_timeout_ms,
+        }
 
         try:
             fut = await leader.propose("ACQUIRE", data=data, timestamp_ms=now_ms)
@@ -597,20 +616,23 @@ class ClusterController:
                 )
 
             self._broadcast({
-                "type": "LOCK_ACQUIRED" if result.success else "LOCK_BUSY",
+                "type": "LOCK_ACQUIRED" if result.success else ("LOCK_QUEUED" if result.status == "QUEUED" else "LOCK_BUSY"),
                 "key": key,
                 "client_id": client_id,
                 "fence_token": result.fence_token,
                 "expires_at_ms": result.expires_at_ms,
                 "message": result.message,
+                "queue_position": getattr(result, "queue_position", 0),
             })
 
             return {
                 "success": result.success,
                 "status": result.status,
                 "fence_token": result.fence_token,
+                "fencing_token": result.fence_token,
                 "expires_at_ms": result.expires_at_ms,
                 "message": result.message,
+                "queue_position": getattr(result, "queue_position", 0),
             }
 
         except asyncio.TimeoutError:
@@ -655,6 +677,7 @@ class ClusterController:
                 "success": result.success if result else False,
                 "status": result.status if result else "ERROR",
                 "fence_token": result.fence_token if result else 0,
+                "fencing_token": result.fence_token if result else 0,
                 "expires_at_ms": result.expires_at_ms if result else 0,
                 "message": result.message if result else "",
             }
@@ -681,25 +704,114 @@ class ClusterController:
             sm = self.state_machines[leader.node_id]
             result = sm.get_result(proposed_index)
             if result and result.success:
-                self.record_lease_event(
-                    key=key,
-                    event_type="LEASE_RELEASED",
-                    owner_id=client_id,
-                    fence_token=fence_token,
-                    details={
-                        "node_id": leader.node_id,
-                        "commit_index": proposed_index,
-                        "term": leader.current_term,
-                    },
-                )
+                if result.status == "RELEASED_AND_PROMOTED":
+                    self.record_lease_event(
+                        key=key,
+                        event_type="LEASE_PROMOTED",
+                        owner_id=result.promoted_owner,
+                        fence_token=result.fence_token,
+                        details={
+                            "node_id": leader.node_id,
+                            "commit_index": proposed_index,
+                            "term": leader.current_term,
+                            "previous_owner": client_id,
+                            "expires_at_ms": result.expires_at_ms,
+                        },
+                    )
+                    self._broadcast({
+                        "type": "LOCK_PROMOTED",
+                        "key": key,
+                        "owner": result.promoted_owner,
+                        "fence_token": result.fence_token,
+                        "expires_at_ms": result.expires_at_ms,
+                    })
+                else:
+                    self.record_lease_event(
+                        key=key,
+                        event_type="LEASE_RELEASED",
+                        owner_id=client_id,
+                        fence_token=fence_token,
+                        details={
+                            "node_id": leader.node_id,
+                            "commit_index": proposed_index,
+                            "term": leader.current_term,
+                        },
+                    )
             return {
                 "success": result.success if result else False,
                 "status": result.status if result else "ERROR",
-                "fence_token": fence_token,
+                "fence_token": getattr(result, "fence_token", fence_token) if result else fence_token,
+                "fencing_token": getattr(result, "fence_token", fence_token) if result else fence_token,
+                "promoted_owner": getattr(result, "promoted_owner", "") if result else "",
                 "message": result.message if result else "",
             }
         except Exception as e:
             return {"success": False, "status": "ERROR", "message": str(e)}
+
+    def get_lock_wait_queue(self, key: str) -> List[Dict[str, Any]]:
+        """Returns the wait queue for a given key from the leader's state machine."""
+        leader = self.get_leader()
+        if not leader or leader.node_id not in self.state_machines:
+            return []
+        return self.state_machines[leader.node_id].get_wait_queue(key)
+
+    async def cancel_wait(self, key: str, client_id: str) -> Dict[str, Any]:
+        """Proposes CANCEL_WAIT to deterministically remove a queued contender from the FIFO queue."""
+        leader = self.get_leader()
+        if not leader:
+            return {"success": False, "status": "NO_LEADER", "message": "No active cluster leader"}
+
+        now_ms = int(time.time() * 1000)
+        fut = await leader.propose(
+            "CANCEL_WAIT",
+            data={"key": key, "client_id": client_id},
+            timestamp_ms=now_ms,
+        )
+        try:
+            committed = await asyncio.wait_for(fut, timeout=5.0)
+            self.broadcast_state_update()
+            return {"success": committed, "status": "CANCELLED" if committed else "FAILED"}
+        except Exception as e:
+            return {"success": False, "status": "ERROR", "message": str(e)}
+
+    async def linearizable_read_lock(self, key: str, timeout_s: float = 1.5) -> Dict[str, Any]:
+        """
+        Executes a linearizable ReadIndex read on the leader.
+        Verifies majority quorum confirmation before returning lock state.
+        """
+        leader = self.get_leader()
+        if not leader:
+            return {"success": False, "status": "NO_LEADER", "message": "No active cluster leader"}
+
+        try:
+            await leader.read_index(timeout_s=timeout_s)
+            now_ms = int(time.time() * 1000)
+            sm = self.state_machines[leader.node_id]
+            lock = sm.get_lock(key, now_ms)
+            queue = sm.get_wait_queue(key)
+            if lock:
+                return {
+                    "success": True,
+                    "is_locked": True,
+                    "owner": lock.owner,
+                    "fence_token": lock.fence_token,
+                    "fencing_token": lock.fence_token,
+                    "expires_at_ms": lock.expires_at_ms,
+                    "remaining_ttl_ms": max(0, lock.expires_at_ms - now_ms),
+                    "wait_queue_length": len(queue),
+                }
+            return {
+                "success": True,
+                "is_locked": False,
+                "owner": None,
+                "fence_token": 0,
+                "fencing_token": 0,
+                "expires_at_ms": 0,
+                "remaining_ttl_ms": 0,
+                "wait_queue_length": len(queue),
+            }
+        except Exception as e:
+            return {"success": False, "status": "READ_INDEX_FAILED", "message": str(e)}
 
     # =========================================================================
     # Chaos Engineering Controls
@@ -808,13 +920,17 @@ class ClusterController:
             "description": f"Worker-Alpha experiences an unexpected 2.5s Garbage Collection pause...",
         })
 
-        # Step 3: Expire Worker Alpha's lock manually or fast-forward
+        # Step 3: Expire Worker Alpha's lock via Raft consensus so all replicas stay strictly in sync
         leader = self.get_leader()
-        if leader and leader.node_id in self.state_machines:
-            sm = self.state_machines[leader.node_id]
-            if resource_name in sm.locks:
-                # Force expiration for simulation
-                sm.locks[resource_name].expires_at_ms = int(time.time() * 1000) - 100
+        if leader:
+            now_ms = int(time.time() * 1000)
+            fut = await leader.propose("EXPIRE", data={"key": resource_name}, timestamp_ms=now_ms)
+            await asyncio.wait_for(fut, timeout=3.0)
+        else:
+            expired_ts = int(time.time() * 1000) - 100
+            for sm in self.state_machines.values():
+                if resource_name in sm.locks:
+                    sm.locks[resource_name].expires_at_ms = expired_ts
 
         steps.append({
             "step": 3,

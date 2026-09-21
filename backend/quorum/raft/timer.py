@@ -6,8 +6,11 @@ Supports randomized timeouts, deterministic seeds, manual trigger hooks for test
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 from typing import Awaitable, Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ElectionTimer:
@@ -59,9 +62,12 @@ class ElectionTimer:
             try:
                 await asyncio.sleep(timeout)
                 if not self._cancelled:
-                    res = self.callback()
-                    if asyncio.iscoroutine(res):
-                        await res
+                    try:
+                        res = self.callback()
+                        if asyncio.iscoroutine(res):
+                            await res
+                    except Exception as e:
+                        logger.error(f"Error in election timer callback: {e}", exc_info=True)
             except asyncio.CancelledError:
                 pass
 
@@ -112,9 +118,12 @@ class HeartbeatTimer:
                     await asyncio.sleep(self.interval_s)
                     if not self._running:
                         break
-                    res = self.callback()
-                    if asyncio.iscoroutine(res):
-                        await res
+                    try:
+                        res = self.callback()
+                        if asyncio.iscoroutine(res):
+                            await res
+                    except Exception as e:
+                        logger.error(f"Error in heartbeat timer callback: {e}", exc_info=True)
             except asyncio.CancelledError:
                 pass
 

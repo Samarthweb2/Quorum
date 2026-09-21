@@ -332,12 +332,18 @@ class AgentSwarmCoordinator:
         self._broadcast({"type": "AI_AGENT_EVENT", "step": s2})
         step_idx += 1
 
-        # Step 3: Fast forward lock expiration in state machine
-        leader = self.controller.get_leader()
-        if leader and leader.node_id in self.controller.state_machines:
-            sm = self.controller.state_machines[leader.node_id]
-            if resource_name in sm.locks:
-                sm.locks[resource_name].expires_at_ms = int(time.time() * 1000) - 50
+        # Step 3: Fast forward lock expiration across cluster via Raft consensus
+        leader = self.controller.get_leader() if hasattr(self.controller, "get_leader") else None
+        if leader:
+            now_ms = int(time.time() * 1000)
+            fut = await leader.propose("EXPIRE", data={"key": resource_name}, timestamp_ms=now_ms)
+            await asyncio.wait_for(fut, timeout=3.0)
+        else:
+            expired_ts = int(time.time() * 1000) - 50
+            if hasattr(self.controller, "state_machines"):
+                for sm in self.controller.state_machines.values():
+                    if resource_name in sm.locks:
+                        sm.locks[resource_name].expires_at_ms = expired_ts
 
         s3 = {
             "step": step_idx,

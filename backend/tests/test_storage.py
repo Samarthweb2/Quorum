@@ -232,3 +232,80 @@ def test_lock_state_machine_snapshot():
     assert "db" in sm2.locks
     assert sm2.locks["db"].owner == "c1"
     assert sm2.locks["db"].fence_token == 1
+
+
+def test_raft_node_restores_snapshot_into_state_machine_on_boot(tmp_path: Path):
+    from quorum.raft.node import RaftNode
+    from quorum.state_machine.lock_manager import LockStateMachine
+
+    # 1. Prepare disk with snapshot
+    log = LogStorage(tmp_path)
+    sm_initial = LockStateMachine()
+    e1 = LogEntry(index=1, term=1, command_type="ACQUIRE", data={"key": "prod-db", "client_id": "worker-1", "ttl_ms": 60000}, timestamp_ms=5000)
+    sm_initial.apply(e1)
+    snap_data = sm_initial.export_snapshot()
+
+    log.save_snapshot(last_included_index=1, last_included_term=1, data=snap_data)
+    log.compact_prefix(up_to_index=1)
+
+    # 2. Boot a fresh RaftNode with fresh StateMachine
+    sm_reloaded = LockStateMachine()
+    node = RaftNode(
+        node_id="node-test",
+        peers=[],
+        data_dir=tmp_path,
+        on_apply_entry=sm_reloaded.apply,
+        on_restore_snapshot=sm_reloaded.import_snapshot,
+    )
+
+    # Verify that the state machine was automatically restored from disk snapshot
+    assert sm_reloaded.last_applied_index == 1
+    assert sm_reloaded.fencing_token_counter == 1
+    assert "prod-db" in sm_reloaded.locks
+    assert sm_reloaded.locks["prod-db"].owner == "worker-1"
+    assert sm_reloaded.locks["prod-db"].fence_token == 1
+
+
+def test_state_machine_results_cache_bounded():
+    from quorum.state_machine.lock_manager import LockStateMachine
+    sm = LockStateMachine()
+
+    # Apply 1200 entries
+    for i in range(1, 1201):
+        entry = LogEntry(
+            index=i,
+            term=1,
+            command_type="ACQUIRE",
+            data={"key": f"key-{i}", "client_id": "client-1", "ttl_ms": 5000},
+            timestamp_ms=1000 + i,
+        )
+        sm.apply(entry)
+
+    # Cache should be bounded to 1000 entries
+    assert len(sm._results_cache) == 1000
+    # Old entries (1..200) evicted
+    assert sm.get_result(1) is None
+    assert sm.get_result(200) is None
+    # Recent entries (201..1200) preserved
+    assert sm.get_result(201) is not None
+    assert sm.get_result(1200) is not None
+
+
+def test_state_machine_get_active_locks():
+    from quorum.state_machine.lock_manager import LockStateMachine
+    sm = LockStateMachine()
+
+    e1 = LogEntry(index=1, term=1, command_type="ACQUIRE", data={"key": "short-lock", "client_id": "c1", "ttl_ms": 500}, timestamp_ms=1000)
+    e2 = LogEntry(index=2, term=1, command_type="ACQUIRE", data={"key": "long-lock", "client_id": "c2", "ttl_ms": 5000}, timestamp_ms=1000)
+    sm.apply(e1)
+    sm.apply(e2)
+
+    # At t=1100, both active
+    active_1100 = sm.get_active_locks(1100)
+    assert "short-lock" in active_1100
+    assert "long-lock" in active_1100
+
+    # At t=1600 (short-lock expired at 1500), only long-lock active
+    active_1600 = sm.get_active_locks(1600)
+    assert "short-lock" not in active_1600
+    assert "long-lock" in active_1600

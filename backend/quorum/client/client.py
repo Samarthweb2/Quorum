@@ -17,7 +17,7 @@ import random
 import time
 import uuid
 from dataclasses import dataclass
-from typing import AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, Dict, List, Optional, Set
 import grpc
 
 from quorum.proto import quorum_pb2, quorum_pb2_grpc
@@ -51,6 +51,16 @@ class LockHandle:
     @property
     def is_expired(self) -> bool:
         return int(time.time() * 1000) >= self.expires_at_ms
+
+    def postgres(self, conn: Any, token_col: str = "last_fence_token") -> Any:
+        """Returns a PostgresFencedGuard configured with this lock's fencing token."""
+        from quorum.client.guards.postgres import PostgresFencedGuard
+        return PostgresFencedGuard(conn, fence_token=self.fence_token, token_col=token_col)
+
+    def redis(self, redis_client: Any, token_field: str = "_fence_token") -> Any:
+        """Returns a RedisFencedGuard configured with this lock's fencing token."""
+        from quorum.client.guards.redis import RedisFencedGuard
+        return RedisFencedGuard(redis_client, fence_token=self.fence_token, token_field=token_field)
 
 
 @dataclass

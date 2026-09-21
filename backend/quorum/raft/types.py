@@ -12,6 +12,7 @@ from quorum.raft.storage import LogEntry
 
 class Role(str, Enum):
     FOLLOWER = "FOLLOWER"
+    PRE_CANDIDATE = "PRE_CANDIDATE"
     CANDIDATE = "CANDIDATE"
     LEADER = "LEADER"
 
@@ -22,6 +23,7 @@ class RequestVoteArgs:
     candidate_id: str
     last_log_index: int
     last_log_term: int
+    is_pre_vote: bool = False
 
 
 @dataclass

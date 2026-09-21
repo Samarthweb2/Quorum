@@ -34,10 +34,18 @@ def broadcast_to_websockets(event: Dict[str, Any]) -> None:
         return
 
     payload = json.dumps(event)
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        for ws in list(connected_websockets):
-            asyncio.create_task(_safe_send(ws, payload))
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_closed():
+            return
+    except RuntimeError:
+        return
+
+    for ws in list(connected_websockets):
+        try:
+            loop.create_task(_safe_send(ws, payload))
+        except Exception:
+            connected_websockets.discard(ws)
 
 
 async def _safe_send(ws: WebSocket, payload: str) -> None:
@@ -93,14 +101,17 @@ class AcquireLockReq(BaseModel):
 class RenewLockReq(BaseModel):
     key: str
     client_id: str
-    fence_token: int
+    fence_token: Optional[int] = None
+    fencing_token: Optional[int] = None
     ttl_ms: int = Field(default=5000)
 
 
 class ReleaseLockReq(BaseModel):
     key: str
     client_id: str
-    fence_token: int
+    fence_token: Optional[int] = None
+    fencing_token: Optional[int] = None
+
 
 
 class AcquireLeaseReq(BaseModel):
@@ -108,6 +119,8 @@ class AcquireLeaseReq(BaseModel):
     owner_id: Optional[str] = None
     client_id: Optional[str] = None
     ttl_ms: int = Field(default=5000)
+    wait_if_busy: bool = False
+    wait_timeout_ms: int = Field(default=60000)
 
 
 class RenewLeaseReq(BaseModel):
@@ -166,6 +179,7 @@ async def get_nodes():
 
 
 @app.get("/api/leases")
+@app.get("/api/locks")
 async def get_leases():
     """Returns active leases with key, owner_id, fencing_token, acquired_at, expires_at, remaining_ttl_ms."""
     if not controller:
@@ -174,16 +188,24 @@ async def get_leases():
 
 
 @app.post("/api/leases/acquire")
+@app.post("/api/locks/acquire")
 async def acquire_lease(req: AcquireLeaseReq):
-    """Acquires a distributed lease with monotonic fencing token."""
+    """Acquires a distributed lease with monotonic fencing token, optional wait queueing."""
     if not controller:
         raise HTTPException(status_code=503, detail="Cluster not initialized")
     client_id = req.owner_id or req.client_id or "worker-alpha"
-    result = await controller.acquire_lock(req.key, client_id, req.ttl_ms)
+    result = await controller.acquire_lock(
+        req.key,
+        client_id,
+        req.ttl_ms,
+        wait_if_busy=req.wait_if_busy,
+        wait_timeout_ms=req.wait_timeout_ms,
+    )
     return result
 
 
 @app.post("/api/leases/{key}/renew")
+@app.post("/api/locks/{key}/renew")
 async def renew_lease(key: str, req: RenewLeaseReq):
     """Renews a lease TTL using client_id and fencing_token."""
     if not controller:
@@ -195,6 +217,7 @@ async def renew_lease(key: str, req: RenewLeaseReq):
 
 
 @app.post("/api/leases/{key}/release")
+@app.post("/api/locks/{key}/release")
 async def release_lease(key: str, req: ReleaseLeaseReq):
     """Releases an active lease."""
     if not controller:
@@ -205,7 +228,38 @@ async def release_lease(key: str, req: ReleaseLeaseReq):
     return result
 
 
+class CancelWaitReq(BaseModel):
+    client_id: str
+
+
+@app.post("/api/leases/{key}/cancel")
+@app.post("/api/locks/{key}/cancel")
+async def cancel_wait(key: str, req: CancelWaitReq):
+    """Cancels a queued waiter from the FIFO wait queue."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    return await controller.cancel_wait(key, req.client_id)
+
+
+@app.get("/api/leases/{key}/queue")
+@app.get("/api/locks/{key}/queue")
+async def get_lease_queue(key: str):
+    """Returns the current FIFO wait queue for a given lease key."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    return {"key": key, "queue": controller.get_lock_wait_queue(key)}
+
+
+@app.get("/api/leases/{key}/linearizable")
+async def get_linearizable_lease(key: str):
+    """Returns linearizable lease state validated via Raft ReadIndex heartbeat confirmation."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster not initialized")
+    return await controller.linearizable_read_lock(key)
+
+
 @app.get("/api/leases/{key}/history")
+@app.get("/api/locks/{key}/history")
 async def get_lease_history(key: str):
     """Returns ordered event history for a given lease key."""
     if not controller:
@@ -259,7 +313,8 @@ async def acquire_lock(req: AcquireLockReq):
 async def renew_lock(req: RenewLockReq):
     if not controller:
         raise HTTPException(status_code=503, detail="Cluster not initialized")
-    result = await controller.renew_lock(req.key, req.client_id, req.fence_token, req.ttl_ms)
+    token = req.fence_token if req.fence_token is not None else (req.fencing_token or 0)
+    result = await controller.renew_lock(req.key, req.client_id, token, req.ttl_ms)
     return result
 
 
@@ -267,7 +322,8 @@ async def renew_lock(req: RenewLockReq):
 async def release_lock(req: ReleaseLockReq):
     if not controller:
         raise HTTPException(status_code=503, detail="Cluster not initialized")
-    result = await controller.release_lock(req.key, req.client_id, req.fence_token)
+    token = req.fence_token if req.fence_token is not None else (req.fencing_token or 0)
+    result = await controller.release_lock(req.key, req.client_id, token)
     return result
 
 
@@ -351,6 +407,62 @@ async def simulate_ai_coordination(req: AiSimReq):
     else:
         raise HTTPException(status_code=400, detail=f"Invalid scenario '{req.scenario}'. Must be 'safe', 'zombie', or 'chaos'.")
 
+
+# =============================================================================
+# Health & Observability Metrics
+# =============================================================================
+
+@app.get("/healthz")
+async def healthz():
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster initializing")
+    status = controller.get_cluster_status()
+    return {"status": "ok", "health": status.get("health", "UNKNOWN"), "alive_nodes": status.get("alive_nodes", 0)}
+
+
+@app.get("/readyz")
+async def readyz():
+    if not controller:
+        raise HTTPException(status_code=503, detail="Cluster initializing")
+    status = controller.get_cluster_status()
+    is_ready = bool(status.get("leader_id")) and status.get("health") in ("HEALTHY", "PARTITIONED")
+    if not is_ready:
+        raise HTTPException(status_code=503, detail="No elected leader or quorum lost")
+    return {"ready": True, "leader_id": status.get("leader_id")}
+
+
+@app.get("/metrics")
+async def metrics():
+    from fastapi.responses import PlainTextResponse
+    if not controller:
+        return PlainTextResponse("# Cluster not initialized\n", status_code=503)
+    status = controller.get_cluster_status()
+    lines = [
+        "# HELP quorum_cluster_nodes_total Total configured nodes in cluster",
+        "# TYPE quorum_cluster_nodes_total gauge",
+        f"quorum_cluster_nodes_total {status.get('total_nodes', 5)}",
+        "# HELP quorum_cluster_alive_nodes Current alive nodes in cluster",
+        "# TYPE quorum_cluster_alive_nodes gauge",
+        f"quorum_cluster_alive_nodes {status.get('alive_nodes', 0)}",
+        "# HELP quorum_proposals_total Total lock proposals processed",
+        "# TYPE quorum_proposals_total counter",
+        f"quorum_proposals_total {status.get('total_proposals', 0)}",
+        "# HELP quorum_proposals_successful Successful committed proposals",
+        "# TYPE quorum_proposals_successful counter",
+        f"quorum_proposals_successful {status.get('successful_proposals', 0)}",
+        "# HELP quorum_active_locks Number of currently active distributed locks",
+        "# TYPE quorum_active_locks gauge",
+        f"quorum_active_locks {len(status.get('active_locks', []))}",
+    ]
+    for n in status.get("nodes", []):
+        nid = n["node_id"]
+        term = n["current_term"]
+        commit = n["commit_index"]
+        is_leader = 1 if n["role"] == "LEADER" else 0
+        lines.append(f'quorum_node_term{{node_id="{nid}"}} {term}')
+        lines.append(f'quorum_node_commit_index{{node_id="{nid}"}} {commit}')
+        lines.append(f'quorum_node_is_leader{{node_id="{nid}"}} {is_leader}')
+    return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain")
 
 
 # =============================================================================

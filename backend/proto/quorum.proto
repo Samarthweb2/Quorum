@@ -17,12 +17,15 @@ enum LockStatus {
   LOCK_INVALID_TOKEN = 3;
   LOCK_EXPIRED = 4;
   LOCK_ERROR = 5;
+  LOCK_QUEUED = 6;
 }
 
 message AcquireLockRequest {
   string key = 1;
   string client_id = 2;
   int64 ttl_ms = 3;
+  bool wait_if_busy = 4;
+  int64 wait_timeout_ms = 5;
 }
 
 message AcquireLockResponse {
@@ -32,6 +35,7 @@ message AcquireLockResponse {
   string leader_id = 4;
   string leader_address = 5;
   string message = 6;
+  int64 queue_position = 7;
 }
 
 message RenewLockRequest {
@@ -65,6 +69,7 @@ message ReleaseLockResponse {
 
 message GetLockRequest {
   string key = 1;
+  bool linearizable = 2;
 }
 
 message GetLockResponse {
@@ -74,6 +79,7 @@ message GetLockResponse {
   int64 remaining_ttl_ms = 4;
   string leader_id = 5;
   string leader_address = 6;
+  int64 wait_queue_length = 7;
 }
 
 message WatchLeaderRequest {

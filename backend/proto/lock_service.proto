@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package quorum.lock.v1;
+
+option py_generic_services = true;
+
+service LockService {
+  // Server-streaming RPC for push-based lock acquisition and queuing
+  rpc AcquireLockStream(AcquireLockStreamRequest) returns (stream LockStreamEvent);
+  rpc ReleaseLock(ReleaseLockRequest) returns (ReleaseLockResponse);
+}
+
+enum LockEventType {
+  LOCK_EVENT_TYPE_UNSPECIFIED = 0;
+  LOCK_EVENT_TYPE_QUEUED = 1;          // Enqueued in FIFO order; waiting turn
+  LOCK_EVENT_TYPE_GRANTED = 2;         // Lock acquired (immediately or via promotion)
+  LOCK_EVENT_TYPE_REJECTED = 3;        // Rejected (queue timeout, busy without wait)
+  LOCK_EVENT_TYPE_EXPIRED = 4;         // Lease expired while held
+  LOCK_EVENT_TYPE_LEADERSHIP_LOST = 5; // Leader stepped down; reconnect required
+}
+
+message AcquireLockStreamRequest {
+  string key = 1;
+  string client_id = 2;
+  int64 ttl_ms = 3;
+  int64 wait_timeout_ms = 4; // Max duration willing to wait in line
+}
+
+message QueuedPayload {
+  int32 queue_position = 1;
+  int64 estimated_wait_ms = 2;
+}
+
+message GrantedPayload {
+  int64 fence_token = 1;
+  int64 lease_duration_ms = 2;
+  int64 expires_at_ms = 3;
+}
+
+message RejectedPayload {
+  string reason = 1;
+}
+
+message LockStreamEvent {
+  string key = 1;
+  string client_id = 2;
+  LockEventType event_type = 3;
+  
+  oneof payload {
+    QueuedPayload queued = 4;
+    GrantedPayload granted = 5;
+    RejectedPayload rejected = 6;
+  }
+}
+
+message ReleaseLockRequest {
+  string key = 1;
+  string client_id = 2;
+  int64 fence_token = 3;
+}
+
+message ReleaseLockResponse {
+  bool success = 1;
+  string message = 2;
+}

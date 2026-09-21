@@ -53,7 +53,10 @@ async def test_majority_vs_minority_partition(tmp_path: Path, fake_network: Fake
         await node.start()
 
     try:
-        await asyncio.sleep(0.05)
+        for _ in range(20):
+            if nodes["node-1"].role == Role.LEADER:
+                break
+            await asyncio.sleep(0.01)
         assert nodes["node-1"].role == Role.LEADER
 
         # Initial commit across all 5 nodes
@@ -78,7 +81,10 @@ async def test_majority_vs_minority_partition(tmp_path: Path, fake_network: Fake
         # 3. Heal partition
         fake_network.heal_partition()
         # Node-4's higher term causes leader re-election; cluster stabilizes and replicates log
-        await asyncio.sleep(0.15)
+        for _ in range(30):
+            if all("lockB" in sms[nid].locks and sms[nid].locks["lockB"].fence_token == 2 for nid in node_ids):
+                break
+            await asyncio.sleep(0.01)
 
         # All nodes must agree on lockB and fencing token
         for nid in node_ids:

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
 
@@ -50,11 +51,15 @@ class RaftNode:
         random_seed: Optional[int] = None,
         manual_timer_mode: bool = False,
         on_leadership_change: Optional[Callable[[Role, Optional[str], int], None]] = None,
+        on_apply_entry: Optional[Callable[[LogEntry], None]] = None,
+        on_restore_snapshot: Optional[Callable[[bytes], None]] = None,
+        pre_vote_enabled: bool = False,
     ) -> None:
         self.node_id = node_id
         self.peers = [p for p in peers if p != node_id]
         self.data_dir = Path(data_dir)
         self.transport = transport
+        self.pre_vote_enabled = pre_vote_enabled
 
         # Persistence
         self.state_storage = StateStorage(self.data_dir)
@@ -76,20 +81,24 @@ class RaftNode:
 
         # State machine and commit waiters
         self._commit_waiters: Dict[int, asyncio.Future[bool]] = {}
-        self.on_apply_entry: Optional[Callable[[LogEntry], None]] = None
-        self.on_restore_snapshot: Optional[Callable[[bytes], None]] = None
+        self.on_apply_entry = on_apply_entry
+        self._on_restore_snapshot: Optional[Callable[[bytes], None]] = None
+        self._initial_snap_data: Optional[bytes] = None
 
         # Restore from snapshot if present on disk
         snap_idx, snap_term, snap_data = self.log_storage.load_snapshot()
         if snap_data is not None:
             self.commit_index = max(self.commit_index, snap_idx)
             self.last_applied = max(self.last_applied, snap_idx)
+            self._initial_snap_data = snap_data
+
+        if on_restore_snapshot:
+            self.on_restore_snapshot = on_restore_snapshot
 
         # Concurrency & locks
         self._lock = asyncio.Lock()
         self._running = False
         self._heartbeat_tasks: Set[asyncio.Task] = set()
-        self._replication_events: Dict[str, asyncio.Event] = {peer: asyncio.Event() for peer in self.peers}
 
         # Callbacks
         self.on_leadership_change = on_leadership_change
@@ -107,6 +116,28 @@ class RaftNode:
             callback=self._on_heartbeat_tick,
         )
 
+        # Leader Lease state (Zero-RTT Linearizable Reads)
+        # Bounded by 80% of minimum election timeout to strictly guarantee no other leader can be elected
+        self.leader_lease_duration_s: float = min_election_timeout_s * 0.8
+        self.leader_lease_valid_until: float = 0.0
+        self.zero_rtt_reads_count: int = 0
+        self._recent_acks: Dict[str, float] = {}
+
+    @property
+    def on_restore_snapshot(self) -> Optional[Callable[[bytes], None]]:
+        return self._on_restore_snapshot
+
+    @on_restore_snapshot.setter
+    def on_restore_snapshot(self, callback: Optional[Callable[[bytes], None]]) -> None:
+        self._on_restore_snapshot = callback
+        if callback and self._initial_snap_data is not None:
+            try:
+                callback(self._initial_snap_data)
+                self._initial_snap_data = None
+                logger.info(f"[{self.node_id}] Restored state machine from disk snapshot")
+            except Exception as e:
+                logger.exception(f"[{self.node_id}] Error restoring snapshot into state machine: {e}")
+
     @property
     def is_running(self) -> bool:
         return self._running
@@ -115,6 +146,28 @@ class RaftNode:
     def quorum_size(self) -> int:
         total_nodes = len(self.peers) + 1
         return (total_nodes // 2) + 1
+
+    def is_leader(self) -> bool:
+        """Returns True if this node is currently the cluster LEADER."""
+        return self.role == Role.LEADER
+
+    @property
+    def is_leader_lease_valid(self) -> bool:
+        """Returns True if this node is LEADER and holds a valid bounded-clock lease."""
+        if not self._running or self.role != Role.LEADER:
+            return False
+        if not self.peers:
+            return True
+        return time.monotonic() < self.leader_lease_valid_until
+
+    @property
+    def leader_lease_remaining_s(self) -> float:
+        """Returns remaining seconds on current leader lease, or 0.0 if expired."""
+        if not self.is_leader_lease_valid:
+            return 0.0
+        if not self.peers:
+            return 999999.0
+        return max(0.0, self.leader_lease_valid_until - time.monotonic())
 
     def set_transport(self, transport: RaftTransport) -> None:
         self.transport = transport
@@ -127,21 +180,36 @@ class RaftNode:
             self._running = True
             self.role = Role.FOLLOWER
             self.leader_id = None
+            if self._on_restore_snapshot and self._initial_snap_data is not None:
+                try:
+                    self._on_restore_snapshot(self._initial_snap_data)
+                    self._initial_snap_data = None
+                except Exception as e:
+                    logger.exception(f"[{self.node_id}] Error restoring snapshot into state machine on start: {e}")
             self.election_timer.start()
             logger.info(f"[{self.node_id}] Started Raft node in Term {self.current_term} as FOLLOWER")
 
     async def stop(self) -> None:
         """Stops the Raft node and cleans up tasks and timers."""
         async with self._lock:
+            was_leader = (self.role == Role.LEADER)
             self._running = False
+            self.role = Role.FOLLOWER
+            self.leader_id = None
             self.election_timer.cancel()
             self.heartbeat_timer.stop()
             for task in list(self._heartbeat_tasks):
                 task.cancel()
             self._heartbeat_tasks.clear()
+            for fut in self._commit_waiters.values():
+                if not fut.done():
+                    fut.set_result(False)
+            self._commit_waiters.clear()
             if self.transport:
                 await self.transport.close()
             logger.info(f"[{self.node_id}] Stopped Raft node")
+            if was_leader and self.on_leadership_change:
+                self.on_leadership_change(self.role, self.leader_id, self.current_term)
 
     # =========================================================================
     # Leader Election Logic
@@ -149,6 +217,72 @@ class RaftNode:
 
     async def _on_election_timeout(self) -> None:
         """Triggered when election timer expires without heartbeat."""
+        if self.pre_vote_enabled:
+            await self._start_pre_vote()
+        else:
+            await self._start_real_election()
+
+    async def _start_pre_vote(self) -> None:
+        """Runs Pre-Vote phase (Ongaro §9.6) to prevent disruptive term increments."""
+        async with self._lock:
+            if not self._running or self.role == Role.LEADER:
+                return
+
+            if not self.peers:
+                await self._start_real_election()
+                return
+
+            self.role = Role.PRE_CANDIDATE
+            pre_vote_term = self.current_term + 1
+            self.election_timer.reset()
+
+            args = RequestVoteArgs(
+                term=pre_vote_term,
+                candidate_id=self.node_id,
+                last_log_index=self.log_storage.last_log_index,
+                last_log_term=self.log_storage.last_log_term,
+                is_pre_vote=True,
+            )
+
+        votes_received = 1  # Self pre-vote
+        vote_lock = asyncio.Lock()
+        won_prevote = False
+
+        async def _ask_peer(peer_id: str) -> None:
+            nonlocal votes_received, won_prevote
+            if not self.transport:
+                return
+            reply = await self.transport.send_request_vote(peer_id, args)
+            if reply is None:
+                return
+
+            async with self._lock:
+                if not self._running or self.role != Role.PRE_CANDIDATE:
+                    return
+
+                if reply.term > self.current_term:
+                    await self._step_down(reply.term)
+                    return
+
+                if reply.vote_granted:
+                    async with vote_lock:
+                        votes_received += 1
+                        if votes_received >= self.quorum_size and self.role == Role.PRE_CANDIDATE:
+                            won_prevote = True
+
+        tasks = [asyncio.create_task(_ask_peer(peer)) for peer in self.peers]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        if won_prevote:
+            await self._start_real_election()
+        else:
+            async with self._lock:
+                if self.role == Role.PRE_CANDIDATE:
+                    self.role = Role.FOLLOWER
+                    self.election_timer.reset()
+
+    async def _start_real_election(self) -> None:
+        """Transitions node to CANDIDATE, increments term, and solicits binding votes."""
         async with self._lock:
             if not self._running or self.role == Role.LEADER:
                 return
@@ -178,6 +312,7 @@ class RaftNode:
                 candidate_id=self.node_id,
                 last_log_index=self.log_storage.last_log_index,
                 last_log_term=self.log_storage.last_log_term,
+                is_pre_vote=False,
             )
 
         # Send RequestVote RPCs in parallel outside node lock
@@ -213,8 +348,32 @@ class RaftNode:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def handle_request_vote(self, args: RequestVoteArgs) -> RequestVoteReply:
-        """Handler for incoming RequestVote RPC."""
+        """Handler for incoming RequestVote and PreVote RPCs."""
         async with self._lock:
+            if args.is_pre_vote:
+                # Pre-Vote handling (Ongaro §9.6)
+                if args.term <= self.current_term:
+                    return RequestVoteReply(term=self.current_term, vote_granted=False)
+
+                # Do not grant pre-vote if we are an active leader
+                if self.role == Role.LEADER:
+                    return RequestVoteReply(term=self.current_term, vote_granted=False)
+
+                my_last_term = self.log_storage.last_log_term
+                my_last_index = self.log_storage.last_log_index
+                candidate_up_to_date = False
+                if args.last_log_term > my_last_term:
+                    candidate_up_to_date = True
+                elif args.last_log_term == my_last_term:
+                    candidate_up_to_date = (args.last_log_index >= my_last_index)
+
+                if candidate_up_to_date:
+                    logger.info(f"[{self.node_id}] Granted pre-vote to {args.candidate_id} for target term {args.term}")
+                    return RequestVoteReply(term=self.current_term, vote_granted=True)
+
+                return RequestVoteReply(term=self.current_term, vote_granted=False)
+
+            # Binding RequestVote handling
             # 1. Reply false if term < currentTerm (§5.1)
             if args.term < self.current_term:
                 return RequestVoteReply(term=self.current_term, vote_granted=False)
@@ -260,6 +419,13 @@ class RaftNode:
         self.next_index = {peer: last_index + 1 for peer in self.peers}
         self.match_index = {peer: 0 for peer in self.peers}
 
+        # Initialize leader lease state
+        if not self.peers:
+            self.leader_lease_valid_until = time.monotonic() + self.leader_lease_duration_s
+        else:
+            self.leader_lease_valid_until = 0.0
+        self._recent_acks.clear()
+
         logger.info(f"[{self.node_id}] *** WON ELECTION - BECAME LEADER FOR TERM {self.current_term} ***")
         if self.on_leadership_change:
             self.on_leadership_change(self.role, self.leader_id, self.current_term)
@@ -289,6 +455,8 @@ class RaftNode:
 
         self.heartbeat_timer.stop()
         self.election_timer.reset()
+        self.leader_lease_valid_until = 0.0
+        self._recent_acks.clear()
 
         leader_changed = (old_leader != self.leader_id)
         if old_role != Role.FOLLOWER or term_changed or leader_changed:
@@ -329,6 +497,12 @@ class RaftNode:
                 fut.set_exception(RuntimeError(f"Not leader. Current leader is {self.leader_id}"))
                 return fut
 
+            if timestamp_ms == 0 and data and "timestamp_ms" in data:
+                try:
+                    timestamp_ms = int(data["timestamp_ms"])
+                except (ValueError, TypeError):
+                    pass
+
             new_index = self.log_storage.last_log_index + 1
             entry = LogEntry(
                 index=new_index,
@@ -351,6 +525,102 @@ class RaftNode:
             # Broadcast to followers
             await self._broadcast_append_entries()
             return fut
+
+    async def read_index(self, timeout_s: float = 1.0, allow_lease: bool = False) -> int:
+        """
+        Implements linearizable ReadIndex (Raft §8) with optional Zero-RTT Leader Leases.
+        If allow_lease is True and this leader holds an active bounded-clock lease,
+        serves the read immediately from local state without sending network RPCs.
+        Otherwise, broadcasts confirmation heartbeats to a majority quorum and refreshes lease.
+        Returns the linearizable commit index.
+        """
+        async with self._lock:
+            if not self._running:
+                raise RuntimeError("Raft node is not running")
+            if self.role != Role.LEADER:
+                raise RuntimeError(f"Not leader: current role is {self.role}, leader is {self.leader_id}")
+            read_commit = self.commit_index
+            leader_term = self.current_term
+            lease_valid = (time.monotonic() < self.leader_lease_valid_until)
+
+        # Single-node cluster fast path
+        if not self.peers:
+            return read_commit
+
+        # Zero-RTT Fast Path: Bounded-Clock Leader Lease
+        if allow_lease and lease_valid:
+            self.zero_rtt_reads_count += 1
+            # Await local application up to read_commit
+            start_time = asyncio.get_event_loop().time()
+            while self.last_applied < read_commit:
+                if asyncio.get_event_loop().time() - start_time > timeout_s:
+                    raise TimeoutError("ReadIndex timed out waiting for local state machine application")
+                await asyncio.sleep(0.001)
+            return read_commit
+
+        acks = 1  # Self acknowledgment
+        ack_lock = asyncio.Lock()
+        quorum_met = asyncio.Event()
+
+        async def _ping_peer(peer_id: str) -> None:
+            nonlocal acks
+            if not self.transport:
+                return
+            async with self._lock:
+                prev_idx = self.next_index.get(peer_id, 1) - 1
+                prev_term = self.log_storage.get_entry(prev_idx).term if prev_idx > 0 else 0
+
+            args = AppendEntriesArgs(
+                term=leader_term,
+                leader_id=self.node_id,
+                prev_log_index=prev_idx,
+                prev_log_term=prev_term,
+                entries=[],
+                leader_commit=read_commit,
+            )
+            try:
+                reply = await self.transport.send_append_entries(peer_id, args, timeout_s=timeout_s)
+                if reply and reply.term == leader_term and reply.success:
+                    async with ack_lock:
+                        acks += 1
+                        if acks >= self.quorum_size:
+                            quorum_met.set()
+                elif reply and reply.term > leader_term:
+                    async with self._lock:
+                        await self._step_down(reply.term)
+            except Exception as e:
+                logger.debug(f"[{self.node_id}] ReadIndex heartbeat to {peer_id} failed: {e}")
+
+        tasks = [asyncio.create_task(_ping_peer(p)) for p in self.peers]
+        try:
+            await asyncio.wait_for(quorum_met.wait(), timeout=timeout_s)
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"ReadIndex failed to verify quorum: received {acks}/{self.quorum_size} acks within {timeout_s}s")
+        finally:
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
+
+        # Refresh leader lease upon verified quorum
+        async with self._lock:
+            now_mono = time.monotonic()
+            self.leader_lease_valid_until = now_mono + self.leader_lease_duration_s
+
+        # Await local application up to read_commit
+        start_time = asyncio.get_event_loop().time()
+        while self.last_applied < read_commit:
+            if asyncio.get_event_loop().time() - start_time > timeout_s:
+                raise TimeoutError("ReadIndex timed out waiting for local state machine application")
+            await asyncio.sleep(0.005)
+
+        return read_commit
+
+    async def read_lease(self, timeout_s: float = 1.0) -> int:
+        """
+        Zero-RTT linearizable local read using bounded-clock leader lease.
+        Serves reads instantly from memory without sending heartbeat RPCs.
+        """
+        return await self.read_index(timeout_s=timeout_s, allow_lease=True)
 
     def _apply_entries(self) -> None:
         """Applies committed log entries to the state machine up to commit_index."""
@@ -521,6 +791,15 @@ class RaftNode:
                 return
 
             if reply.success:
+                now_mono = time.monotonic()
+                self._recent_acks[peer] = now_mono
+                active_acks = 1 + sum(
+                    1 for p, t in self._recent_acks.items()
+                    if p in self.peers and (now_mono - t) < self.leader_lease_duration_s
+                )
+                if active_acks >= self.quorum_size:
+                    self.leader_lease_valid_until = now_mono + self.leader_lease_duration_s
+
                 # Update nextIndex and matchIndex for follower (§5.3)
                 if reply.match_index > self.match_index.get(peer, 0):
                     self.match_index[peer] = reply.match_index
@@ -553,16 +832,32 @@ class RaftNode:
 
             # 2. Reply false if log doesn't contain an entry at prevLogIndex matching prevLogTerm (§5.3)
             if args.prev_log_index > 0:
-                entry = self.log_storage.get_entry(args.prev_log_index)
-                if entry is None or entry.term != args.prev_log_term:
-                    # Provide conflict index for fast convergence
-                    conflict_idx = min(self.log_storage.last_log_index, args.prev_log_index - 1)
+                if args.prev_log_index == self.log_storage.last_included_index:
+                    if args.prev_log_term != self.log_storage.last_included_term:
+                        return AppendEntriesReply(
+                            term=self.current_term,
+                            success=False,
+                            match_index=self.log_storage.last_log_index,
+                            conflict_index=self.log_storage.last_included_index + 1,
+                        )
+                elif args.prev_log_index < self.log_storage.last_included_index:
                     return AppendEntriesReply(
                         term=self.current_term,
                         success=False,
                         match_index=self.log_storage.last_log_index,
-                        conflict_index=max(1, conflict_idx),
+                        conflict_index=self.log_storage.last_included_index + 1,
                     )
+                else:
+                    entry = self.log_storage.get_entry(args.prev_log_index)
+                    if entry is None or entry.term != args.prev_log_term:
+                        # Provide conflict index for fast convergence
+                        conflict_idx = min(self.log_storage.last_log_index, args.prev_log_index - 1)
+                        return AppendEntriesReply(
+                            term=self.current_term,
+                            success=False,
+                            match_index=self.log_storage.last_log_index,
+                            conflict_index=max(1, conflict_idx),
+                        )
 
             # 3. If an existing entry conflicts with a new one (same index, different term), delete existing (§5.3)
             insert_index = args.prev_log_index + 1
@@ -582,8 +877,8 @@ class RaftNode:
 
             # 4. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) (§5.3)
             if args.leader_commit > self.commit_index:
-                last_new_entry_index = args.prev_log_index + len(args.entries)
-                self.commit_index = min(args.leader_commit, last_new_entry_index)
+                last_new_entry_index = args.entries[-1].index if args.entries else self.log_storage.last_log_index
+                self.commit_index = max(self.commit_index, min(args.leader_commit, last_new_entry_index))
                 self._apply_entries()
 
             return AppendEntriesReply(

@@ -28,6 +28,7 @@ class RaftGrpcServicer(raft_pb2_grpc.RaftServiceServicer):
             candidate_id=request.candidate_id,
             last_log_index=request.last_log_index,
             last_log_term=request.last_log_term,
+            is_pre_vote=getattr(request, "is_pre_vote", False),
         )
         reply = await self.node.handle_request_vote(args)
         return raft_pb2.RequestVoteResponse(

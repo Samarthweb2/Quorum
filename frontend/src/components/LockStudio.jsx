@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, Unlock, RefreshCw, Key, ShieldCheck, Clock, User, AlertCircle, CheckCircle2 } from 'lucide-react';
+import FifoWaitQueueTrack from './FifoWaitQueueTrack';
 
 export default function LockStudio({ status, onAcquireLock, onRenewLock, onReleaseLock }) {
   const [keyInput, setKeyInput] = useState('production-db-migrator');
@@ -50,7 +51,8 @@ export default function LockStudio({ status, onAcquireLock, onRenewLock, onRelea
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '24px', alignItems: 'start' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '24px', alignItems: 'start' }}>
       
       {/* Active Locks Table */}
       <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -252,6 +254,15 @@ export default function LockStudio({ status, onAcquireLock, onRenewLock, onRelea
           </div>
         )}
       </div>
+      </div>
+
+      {/* Real-time FIFO Wait Queue Track */}
+      <FifoWaitQueueTrack
+        status={status}
+        activeLocks={activeLocks}
+        onAcquireLock={onAcquireLock}
+        onReleaseLock={onReleaseLock}
+      />
     </div>
   );
 }
