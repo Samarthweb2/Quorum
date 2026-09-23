@@ -43,14 +43,19 @@ export default function App() {
   useEffect(() => {
     let reconnectTimer;
     const connect = () => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host || '127.0.0.1:8000';
-      const ws = new WebSocket(`${protocol}//${host}/ws`);
-      wsRef.current = ws;
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const hostname = window.location.hostname || '127.0.0.1';
+        const ws = new WebSocket(`${protocol}//${hostname}:8000/ws`);
+        wsRef.current = ws;
 
-      ws.onopen = () => {
-        // ws opened
-      };
+        ws.onopen = () => {
+          // ws opened
+        };
+
+        ws.onerror = () => {
+          // resilient fallback
+        };
 
       ws.onmessage = (event) => {
         try {
@@ -63,9 +68,12 @@ export default function App() {
         }
       };
 
-      ws.onclose = () => {
+        ws.onclose = () => {
+          reconnectTimer = setTimeout(connect, 3000);
+        };
+      } catch (e) {
         reconnectTimer = setTimeout(connect, 3000);
-      };
+      }
     };
 
     connect();
