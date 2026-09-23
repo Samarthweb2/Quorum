@@ -1,0 +1,12 @@
+{
+  "name": "quorum-workspace",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Quorum: Distributed Lock & Consensus Control Plane",
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "dev": "npm --prefix frontend run dev",
+    "preview": "npm --prefix frontend run preview",
+    "start": "python scripts/run_dashboard.py"
+  }
+}

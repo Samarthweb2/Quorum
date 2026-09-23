@@ -163,15 +163,16 @@ input, textarea, select {
 
 /* Midday Top Announcement Banner */
 .midday-announcement-bar {
-  background-color: #F7F6F2;
+  background-color: var(--bg-subtle);
   border-bottom: 1px solid var(--border-subtle);
   padding: 8px 16px;
   font-size: 13px;
   text-align: center;
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 .midday-announcement-bar a {
+  color: var(--text-primary);
   text-decoration: underline;
   text-underline-offset: 3px;
   font-weight: 500;
@@ -184,7 +185,7 @@ input, textarea, select {
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 9999px;
   font-size: 13px;
@@ -195,8 +196,8 @@ input, textarea, select {
 }
 
 .midday-pill-badge:hover {
-  border-color: #CFC9BE;
-  background-color: var(--bg-warm);
+  border-color: var(--text-tertiary);
+  background-color: var(--bg-subtle);
 }
 
 /* Midday Metric Card */
@@ -210,7 +211,7 @@ input, textarea, select {
 }
 
 .midday-metric-card:hover {
-  border-color: #D6D1C7;
+  border-color: var(--border-subtle);
   box-shadow: var(--shadow-card);
 }
 
@@ -245,9 +246,9 @@ input, textarea, select {
 }
 
 .midday-command-bar:focus-within {
-  background-color: #FFFFFF;
-  border-color: #121212;
-  box-shadow: 0 0 0 1px #121212, 0 4px 16px rgba(0, 0, 0, 0.04);
+  background-color: var(--bg-card);
+  border-color: var(--btn-black);
+  box-shadow: 0 0 0 1px var(--btn-black), 0 4px 16px rgba(0, 0, 0, 0.04);
 }
 
 /* 50/50 Split Auth Screen */
@@ -285,7 +286,8 @@ input, textarea, select {
 
 .auth-right-side {
   flex: 1;
-  background-color: #FFFFFF;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
   display: flex;
   flex-direction: column;
   justify-content: center;

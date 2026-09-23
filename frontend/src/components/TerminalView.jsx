@@ -39,16 +39,17 @@ export default function TerminalView({ onRunZombieSim = () => {} }) {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '16px 20px',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--bg-card)',
           borderRadius: '12px',
-          border: '1px solid #EAE6DF',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
         <div>
-          <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#121212' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
             Martin Kleppmann Storage Race Console
           </h3>
-          <p style={{ fontSize: '13px', color: '#737373' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
             Verify how Quorum's fencing tokens stop stale writes from delayed GC workers.
           </p>
         </div>
@@ -57,7 +58,7 @@ export default function TerminalView({ onRunZombieSim = () => {} }) {
           onClick={runSimulation}
           disabled={isRunning}
           className="midday-btn-black"
-          style={{ padding: '8px 18px', fontSize: '13px', borderRadius: '8px' }}
+          style={{ padding: '8px 18px', fontSize: '13px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}
         >
           {isRunning ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
           <span>{isRunning ? 'Running Simulation...' : 'Simulate Race'}</span>
@@ -67,20 +68,21 @@ export default function TerminalView({ onRunZombieSim = () => {} }) {
       {/* Terminal Output Screen */}
       <div
         style={{
-          backgroundColor: '#0C0C0C',
+          backgroundColor: 'var(--bg-dark)',
           borderRadius: '12px',
-          border: '1px solid #262626',
+          border: '1px solid var(--border-dark)',
           padding: '20px',
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: '12px',
           minHeight: '380px',
           color: '#EDEDED',
           overflowY: 'auto',
+          boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.4)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '12px', borderBottom: '1px solid #262626', marginBottom: '16px' }}>
-          <Terminal size={14} color="#737373" />
-          <span style={{ color: '#737373', fontSize: '11px' }}>quorum-daemon :: kleppmann-fencing-sandbox</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '12px', borderBottom: '1px solid var(--border-dark)', marginBottom: '16px' }}>
+          <Terminal size={14} color="var(--text-tertiary)" />
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>quorum-daemon :: kleppmann-fencing-sandbox</span>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -91,11 +93,11 @@ export default function TerminalView({ onRunZombieSim = () => {} }) {
                 style={{
                   color:
                     log.type === 'danger'
-                      ? '#EF4444'
+                      ? 'var(--accent-red)'
                       : log.type === 'warn'
-                      ? '#F59E0B'
+                      ? 'var(--accent-amber)'
                       : log.type === 'success'
-                      ? '#10B981'
+                      ? 'var(--accent-emerald)'
                       : '#9CA3AF',
                 }}
               >

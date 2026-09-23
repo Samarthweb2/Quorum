@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "awwwards-landing-page": {
+      "source": "rebyteai-template/rebyte-skills",
+      "sourceType": "github",
+      "skillPath": "awwwards-landing-page/SKILL.md",
+      "computedHash": "dbfbafce339f6d66da38f978f9e009cfd699c1b5c4a5932e56bc453447aa96f3"
+    }
+  }
+}

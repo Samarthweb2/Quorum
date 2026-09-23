@@ -9,9 +9,12 @@ export default function App() {
   const [userEmail, setUserEmail] = useState('sam@mobbin.design');
   const [selectedTeam, setSelectedTeam] = useState({ id: 'slmobbin', name: 'SLMobbin' });
   const [status, setStatus] = useState(null);
+  const [wsConnected, setWsConnected] = useState(false);
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('quorum-theme') || 'light';
   });
+  const [toasts, setToasts] = useState([]);
+  const wsRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -46,32 +49,48 @@ export default function App() {
       try {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const hostname = window.location.hostname || '127.0.0.1';
-        const ws = new WebSocket(`${protocol}//${hostname}:8000/ws`);
+        let wsUrl;
+        if (window.location.port === '5173') {
+          // Local Vite dev server proxying to local backend on 8000
+          wsUrl = `${protocol}//${hostname}:8000/ws`;
+        } else if (window.location.port) {
+          // Custom local or container port (e.g. :8000)
+          wsUrl = `${protocol}//${hostname}:${window.location.port}/ws`;
+        } else {
+          // Cloud production deployment (e.g. Render / Heroku on standard 80/443)
+          wsUrl = `${protocol}//${hostname}/ws`;
+        }
+        const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
-          // ws opened
+          setWsConnected(true);
         };
 
         ws.onerror = () => {
-          // resilient fallback
+          setWsConnected(false);
         };
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'INIT' || data.type === 'CLUSTER_STATE_UPDATE') {
-            if (data.data) setStatus(data.data);
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'INIT' || data.type === 'CLUSTER_STATE_UPDATE') {
+              if (data.data) {
+                setStatus(data.data);
+                setWsConnected(true);
+              }
+            }
+          } catch (e) {
+            // ignore
           }
-        } catch (e) {
-          // ignore
-        }
-      };
+        };
 
         ws.onclose = () => {
+          setWsConnected(false);
           reconnectTimer = setTimeout(connect, 3000);
         };
       } catch (e) {
+        setWsConnected(false);
         reconnectTimer = setTimeout(connect, 3000);
       }
     };
@@ -80,18 +99,19 @@ export default function App() {
     return () => clearTimeout(reconnectTimer);
   }, []);
 
+
   const handleSimulateZombie = async () => {
     addToast('Simulating Martin Kleppmann GC Zombie Worker...', 'warn');
     try {
-      const res = await fetch('/api/chaos/zombie_worker', {
+      const res = await fetch('/api/chaos/simulate-zombie', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resource: 'res:orders_db', client_id: 'worker-1' }),
+        body: JSON.stringify({ resource_name: 'production-orders-db' }),
       });
       const data = await res.json();
-      addToast(data.message || 'Zombie write rejected by Fencing Token Guard!', 'success');
+      addToast(data.message || data.result || 'Zombie write rejected by Fencing Token Guard!', 'success');
     } catch (e) {
-      addToast('Simulated Zombie Worker: Fencing Token #102 rejected stale token #101.', 'success');
+      addToast('Simulated Zombie Worker: Fencing Token rejected stale token.', 'success');
     }
   };
 
@@ -121,24 +141,64 @@ export default function App() {
     }
   };
 
-  const handleKillNode = (nodeId) => {
-    addToast(`Killed node ${nodeId}`, 'danger');
+  const handleKillNode = async (nodeId) => {
+    addToast(`Killing node ${nodeId}...`, 'danger');
+    try {
+      await fetch('/api/chaos/kill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node_id: nodeId }),
+      });
+    } catch (e) { /* offline fallback */ }
   };
 
-  const handleRestartNode = (nodeId) => {
-    addToast(`Restarted node ${nodeId}`, 'success');
+  const handleRestartNode = async (nodeId) => {
+    addToast(`Restarting node ${nodeId}...`, 'success');
+    try {
+      await fetch('/api/chaos/restart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node_id: nodeId }),
+      });
+    } catch (e) { /* offline fallback */ }
   };
 
-  const handlePartition = (nodeId) => {
-    addToast(`Partitioned ${nodeId} from Quorum`, 'warn');
+  const handlePartition = async (nodeId) => {
+    addToast(`Partitioning ${nodeId} from Quorum...`, 'warn');
+    try {
+      await fetch('/api/chaos/partition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partitions: [[nodeId]] }),
+      });
+    } catch (e) { /* offline fallback */ }
   };
 
-  const handleHealPartitions = () => {
-    addToast('All network partitions healed. Quorum re-established.', 'success');
+  const handleHealPartitions = async () => {
+    addToast('Healing all network partitions...', 'success');
+    try {
+      await fetch('/api/chaos/heal', { method: 'POST' });
+    } catch (e) { /* offline fallback */ }
   };
 
-  const handleForceElection = () => {
-    addToast('Triggered Raft leader election ripple.', 'info');
+  const handleForceElection = async () => {
+    addToast('Triggering Raft leader election ripple...', 'info');
+    // Kill current leader to trigger re-election
+    const leaderId = status?.leader_id || status?.leader || 'node-1';
+    try {
+      await fetch('/api/chaos/kill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node_id: leaderId }),
+      });
+      setTimeout(async () => {
+        await fetch('/api/chaos/restart', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node_id: leaderId }),
+        });
+      }, 2000);
+    } catch (e) { /* offline fallback */ }
   };
 
   return (
@@ -158,6 +218,8 @@ export default function App() {
       {view === 'signin' && (
         <SignInPage
           onBackToHome={() => setView('landing')}
+          theme={theme}
+          onToggleTheme={toggleTheme}
           onCompleteAuth={(email) => {
             setUserEmail(email);
             setView('team_select');
@@ -169,6 +231,8 @@ export default function App() {
       {view === 'team_select' && (
         <TeamSelectPage
           userEmail={userEmail}
+          theme={theme}
+          onToggleTheme={toggleTheme}
           onLaunchTeam={(team) => {
             setSelectedTeam(team);
             setView('control_panel');
@@ -181,6 +245,9 @@ export default function App() {
       {view === 'control_panel' && (
         <ControlPanel
           status={status}
+          wsConnected={wsConnected}
+          theme={theme}
+          onToggleTheme={toggleTheme}
           userName={userEmail.split('@')[0] === 'sam' ? 'Sam' : 'Sam'}
           onSignOut={() => setView('landing')}
           onSimulateZombie={handleSimulateZombie}
@@ -232,10 +299,10 @@ export default function App() {
                   toast.type === 'success'
                     ? '#10B981'
                     : toast.type === 'warn'
-                    ? '#F59E0B'
-                    : toast.type === 'danger'
-                    ? '#EF4444'
-                    : '#3B82F6',
+                      ? '#F59E0B'
+                      : toast.type === 'danger'
+                        ? '#EF4444'
+                        : '#3B82F6',
               }}
             />
             <span>{toast.msg}</span>

@@ -74,6 +74,29 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
           >
             Sign in
           </button>
+
+          <button
+            onClick={onToggleTheme}
+            aria-label="Toggle dark mode"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '34px',
+              height: '34px',
+              borderRadius: '6px',
+              border: '1px solid var(--border-subtle)',
+              backgroundColor: 'var(--bg-card)',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-subtle)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card)')}
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
         </nav>
       </header>
 
@@ -134,7 +157,7 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
           >
             Start your cluster
           </button>
-          <span style={{ fontSize: '13px', color: '#999996' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
             100% open source · Production-grade consensus · Zero dependencies
           </span>
         </div>
@@ -147,11 +170,11 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
             justifyContent: 'center',
             gap: '36px',
             marginTop: '36px',
-            color: '#A8A8A4',
+            color: 'var(--text-tertiary)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em' }}>
-            <SunburstLogo size={15} color="#A8A8A4" />
+            <SunburstLogo size={15} color="var(--text-tertiary)" />
             <span>RAFT</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em' }}>
@@ -204,9 +227,9 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
           style={{
             maxWidth: '1100px',
             margin: '0 auto',
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--bg-canvas)',
             borderRadius: '12px 12px 0 0',
-            border: '1px solid rgba(255, 255, 255, 0.14)',
+            border: '1px solid var(--border-subtle)',
             borderBottom: 'none',
             boxShadow: '0 32px 100px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0,0,0,0.04)',
             display: 'flex',
@@ -220,27 +243,27 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
           <div
             style={{
               width: '56px',
-              borderRight: '1px solid #F0EDE6',
+              borderRight: '1px solid var(--border-subtle)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               padding: '16px 0',
               gap: '16px',
-              backgroundColor: '#FFFFFF',
+              backgroundColor: 'var(--bg-card)',
             }}
           >
-            <SunburstLogo size={20} color="#121212" />
+            <SunburstLogo size={20} color="var(--text-primary)" />
             <div
               style={{
                 width: '32px',
                 height: '32px',
                 borderRadius: '6px',
-                border: '1px solid #EAE6DF',
-                backgroundColor: '#F7F6F2',
+                border: '1px solid var(--border-subtle)',
+                backgroundColor: 'var(--bg-subtle)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#121212',
+                color: 'var(--text-primary)',
               }}
             >
               <LayoutGrid size={15} />
@@ -253,7 +276,7 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#8C8C88',
+                color: 'var(--text-tertiary)',
               }}
             >
               <Activity size={15} />
@@ -266,11 +289,12 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
             <div
               style={{
                 height: '52px',
-                borderBottom: '1px solid #F0EDE6',
+                borderBottom: '1px solid var(--border-subtle)',
                 padding: '0 24px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                backgroundColor: 'var(--bg-card)',
               }}
             >
               <div
@@ -280,14 +304,14 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
                   gap: '8px',
                   padding: '6px 12px',
                   borderRadius: '6px',
-                  backgroundColor: '#FBFBFA',
-                  border: '1px solid #F0EDE6',
-                  color: '#8C8C88',
+                  backgroundColor: 'var(--bg-input)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-secondary)',
                   fontSize: '13px',
                   width: '240px',
                 }}
               >
-                <Search size={14} color="#8C8C88" />
+                <Search size={14} color="var(--text-secondary)" />
                 <span>Find anything...</span>
               </div>
 
@@ -297,8 +321,8 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
                     width: '28px',
                     height: '28px',
                     borderRadius: '50%',
-                    backgroundColor: '#1E293B',
-                    color: '#FFFFFF',
+                    backgroundColor: 'var(--btn-black)',
+                    color: 'var(--btn-black-text)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -312,7 +336,7 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
             </div>
 
             {/* Window Content */}
-            <div style={{ padding: '26px 30px 48px' }}>
+            <div style={{ padding: '26px 30px 48px', backgroundColor: 'var(--bg-canvas)' }}>
               {/* Header Greeting & Controls (matching Screenshot 1) */}
               <div
                 style={{
@@ -323,10 +347,10 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
                 }}
               >
                 <div>
-                  <h2 className="font-serif" style={{ fontSize: '36px', fontWeight: 400, color: '#121212', lineHeight: 1.1 }}>
+                  <h2 className="font-serif" style={{ fontSize: '36px', fontWeight: 400, color: 'var(--text-primary)', lineHeight: 1.1 }}>
                     Morning Viktor
                   </h2>
-                  <p style={{ fontSize: '13px', color: '#737373', marginTop: '4px' }}>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                     here's a quick look at how things are going across the cluster.
                   </p>
                 </div>
@@ -338,12 +362,12 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
                       width: '32px',
                       height: '32px',
                       borderRadius: '6px',
-                      border: '1px solid #EAE6DF',
+                      border: '1px solid var(--border-subtle)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#737373',
-                      backgroundColor: '#FFFFFF',
+                      color: 'var(--text-secondary)',
+                      backgroundColor: 'var(--bg-card)',
                     }}
                   >
                     <LayoutGrid size={13} />
@@ -356,29 +380,29 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
                       gap: '4px',
                       padding: '6px 12px',
                       borderRadius: '6px',
-                      border: '1px solid #EAE6DF',
-                      color: '#121212',
+                      border: '1px solid var(--border-subtle)',
+                      color: 'var(--text-primary)',
                       fontWeight: 500,
-                      backgroundColor: '#FFFFFF',
+                      backgroundColor: 'var(--bg-card)',
                     }}
                   >
                     <span>1 year</span>
-                    <ChevronDown size={12} color="#737373" />
+                    <ChevronDown size={12} color="var(--text-secondary)" />
                   </div>
 
-                  <div style={{ display: 'flex', border: '1px solid #EAE6DF', borderRadius: '6px', padding: '2px', backgroundColor: '#FFFFFF' }}>
+                  <div style={{ display: 'flex', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '2px', backgroundColor: 'var(--bg-card)' }}>
                     <span
                       style={{
                         padding: '4px 12px',
                         borderRadius: '4px',
-                        backgroundColor: '#F4F4F2',
-                        color: '#121212',
+                        backgroundColor: 'var(--bg-subtle)',
+                        color: 'var(--text-primary)',
                         fontWeight: 500,
                       }}
                     >
                       Overview
                     </span>
-                    <span style={{ padding: '4px 12px', color: '#737373' }}>
+                    <span style={{ padding: '4px 12px', color: 'var(--text-secondary)' }}>
                       Metrics
                     </span>
                   </div>
@@ -390,19 +414,19 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
                 style={{
                   marginBottom: '20px',
                   padding: '12px 18px',
-                  backgroundColor: '#FBFBFA',
-                  border: '1px solid #EAE6DF',
+                  backgroundColor: 'var(--bg-subtle)',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: '10px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#8C8C88', fontSize: '13px' }}>
-                  <Sparkles size={15} color="#121212" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                  <Sparkles size={15} color="var(--text-primary)" />
                   <span>How can I help you across the Quorum cluster today?</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#8C8C88' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-secondary)' }}>
                   <span style={{ fontSize: '14px', cursor: 'pointer' }}>+</span>
                   <Zap size={13} />
                   <span style={{ fontSize: '13px' }}>@</span>
@@ -411,8 +435,8 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
                       width: '26px',
                       height: '26px',
                       borderRadius: '6px',
-                      backgroundColor: '#121212',
-                      color: '#FFFFFF',
+                      backgroundColor: 'var(--btn-black)',
+                      color: 'var(--btn-black-text)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -425,46 +449,46 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
 
               {/* Action Quick Pills */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '22px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid #EAE6DF', backgroundColor: '#FFFFFF', color: '#121212', fontWeight: 500 }}>
+                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', fontWeight: 500 }}>
                   📄 Replicate Log
                 </span>
-                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid #EAE6DF', backgroundColor: '#FFFFFF', color: '#121212', fontWeight: 500 }}>
+                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', fontWeight: 500 }}>
                   ⚡ Elect Leader
                 </span>
-                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid #EAE6DF', backgroundColor: '#FFFFFF', color: '#121212', fontWeight: 500 }}>
+                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', fontWeight: 500 }}>
                   🛡️ Fencing Lease
                 </span>
-                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid #EAE6DF', backgroundColor: '#FFFFFF', color: '#121212', fontWeight: 500 }}>
+                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', fontWeight: 500 }}>
                   🔍 Inspect State
                 </span>
               </div>
 
               {/* 4 Clean Metric Cards (matching Screenshot 1) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-                <div style={{ padding: '18px', border: '1px solid #EAE6DF', borderRadius: '10px', backgroundColor: '#FFFFFF' }}>
-                  <div style={{ fontSize: '12px', color: '#737373', marginBottom: '6px' }}>Cluster Consensus</div>
-                  <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>99.99%</div>
+                <div style={{ padding: '18px', border: '1px solid var(--border-subtle)', borderRadius: '10px', backgroundColor: 'var(--bg-card)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '6px' }}>Cluster Consensus</div>
+                  <div style={{ fontSize: '24px', fontWeight: 500, color: 'var(--text-primary)' }}>99.99%</div>
                   <div style={{ fontSize: '12px', color: '#059669', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#059669' }} />
                     <span>Raft Term 14 active</span>
                   </div>
                 </div>
 
-                <div style={{ padding: '18px', border: '1px solid #EAE6DF', borderRadius: '10px', backgroundColor: '#FFFFFF' }}>
-                  <div style={{ fontSize: '12px', color: '#737373', marginBottom: '6px' }}>gRPC Streaming Latency</div>
-                  <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>1.2ms</div>
-                  <div style={{ fontSize: '12px', color: '#737373', marginTop: '6px' }}>p99 &lt; 3.2ms</div>
+                <div style={{ padding: '18px', border: '1px solid var(--border-subtle)', borderRadius: '10px', backgroundColor: 'var(--bg-card)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '6px' }}>gRPC Streaming Latency</div>
+                  <div style={{ fontSize: '24px', fontWeight: 500, color: 'var(--text-primary)' }}>1.2ms</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>p99 &lt; 3.2ms</div>
                 </div>
 
-                <div style={{ padding: '18px', border: '1px solid #EAE6DF', borderRadius: '10px', backgroundColor: '#FFFFFF' }}>
-                  <div style={{ fontSize: '12px', color: '#737373', marginBottom: '6px' }}>Committed Log Index</div>
-                  <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>1,842</div>
-                  <div style={{ fontSize: '12px', color: '#737373', marginTop: '6px' }}>Zero uncommitted diffs</div>
+                <div style={{ padding: '18px', border: '1px solid var(--border-subtle)', borderRadius: '10px', backgroundColor: 'var(--bg-card)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '6px' }}>Committed Log Index</div>
+                  <div style={{ fontSize: '24px', fontWeight: 500, color: 'var(--text-primary)' }}>1,842</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>Zero uncommitted diffs</div>
                 </div>
 
-                <div style={{ padding: '18px', border: '1px solid #EAE6DF', borderRadius: '10px', backgroundColor: '#FFFFFF' }}>
-                  <div style={{ fontSize: '12px', color: '#737373', marginBottom: '6px' }}>Fencing Lock Leases</div>
-                  <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>3 Active</div>
+                <div style={{ padding: '18px', border: '1px solid var(--border-subtle)', borderRadius: '10px', backgroundColor: 'var(--bg-card)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '6px' }}>Fencing Lock Leases</div>
+                  <div style={{ fontSize: '24px', fontWeight: 500, color: 'var(--text-primary)' }}>3 Active</div>
                   <div style={{ fontSize: '12px', color: '#059669', marginTop: '6px' }}>0 Split-brain violations</div>
                 </div>
               </div>
@@ -477,18 +501,18 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
           style={{
             maxWidth: '1100px',
             margin: '0 auto',
-            borderTop: '1px solid #222222',
+            borderTop: '1px solid var(--border-subtle)',
             padding: '16px 0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             fontSize: '12px',
-            color: '#737373',
+            color: 'var(--text-secondary)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <SunburstLogo size={16} color="#A0A0A0" />
-            <span style={{ color: '#FFFFFF', fontWeight: 500 }}>Quorum</span>
+            <SunburstLogo size={16} color="var(--text-secondary)" />
+            <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Quorum</span>
           </div>
           <div>curated by Mobbin · Raft &amp; gRPC</div>
         </div>
@@ -497,41 +521,41 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
       {/* 5. Features Grid Section */}
       <section id="features" style={{ maxWidth: '1200px', margin: '80px auto', padding: '0 24px' }}>
         <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', color: '#737373', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
             ENGINEERED FOR RESILIENCE
           </span>
-          <h2 className="font-serif" style={{ fontSize: '44px', fontWeight: 400, marginTop: '8px' }}>
+          <h2 className="font-serif" style={{ fontSize: '44px', fontWeight: 400, marginTop: '8px', color: 'var(--text-primary)' }}>
             Built for mission-critical consensus
           </h2>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
           <div className="midday-metric-card">
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#F4F4F2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-              <Lock size={20} color="#121212" />
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <Lock size={20} color="var(--text-primary)" />
             </div>
-            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>Fencing Tokens vs Zombie Workers</h3>
-            <p style={{ fontSize: '14px', color: '#666664', lineHeight: 1.6 }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>Fencing Tokens vs Zombie Workers</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               Solves Martin Kleppmann's famous storage race. Monotonically incrementing fencing tokens reject stale writes from paused or delayed GC zombie workers.
             </p>
           </div>
 
           <div className="midday-metric-card">
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#F4F4F2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-              <Zap size={20} color="#121212" />
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <Zap size={20} color="var(--text-primary)" />
             </div>
-            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>Bidirectional gRPC Streaming</h3>
-            <p style={{ fontSize: '14px', color: '#666664', lineHeight: 1.6 }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>Bidirectional gRPC Streaming</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               Push-based promotion queue delivers lock grants immediately when released, eliminating polling latency and reducing consensus overhead to sub-millisecond ranges.
             </p>
           </div>
 
           <div className="midday-metric-card">
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#F4F4F2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-              <GitBranch size={20} color="#121212" />
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <GitBranch size={20} color="var(--text-primary)" />
             </div>
-            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>Self-Healing Raft Topology</h3>
-            <p style={{ fontSize: '14px', color: '#666664', lineHeight: 1.6 }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>Self-Healing Raft Topology</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               Instant leader elections, randomized heartbeat jitter, and deterministic log catchup allow clusters to survive arbitrary network partitions without data loss.
             </p>
           </div>
@@ -580,42 +604,7 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
               </div>
             </div>
 
-            {/* Right: Dark / Light Mode Button (exact Screenshot position) */}
-            <div>
-              <button
-                onClick={onToggleTheme}
-                aria-label="Toggle dark mode"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '7px 14px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-subtle)',
-                  backgroundColor: 'var(--bg-card)',
-                  color: 'var(--text-primary)',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  boxShadow: 'var(--shadow-sm)',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-subtle)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card)')}
-              >
-                {theme === 'dark' ? (
-                  <>
-                    <Sun size={14} />
-                    <span>Light mode</span>
-                  </>
-                ) : (
-                  <>
-                    <Moon size={14} />
-                    <span>Dark mode</span>
-                  </>
-                )}
-              </button>
-            </div>
+
           </div>
 
           {/* Status & Copyright Row (matching Screenshot) */}

@@ -1,22 +1,23 @@
 import React from 'react';
 import SunburstLogo from './SunburstLogo';
+import { Sun, Moon } from 'lucide-react';
 
-export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaunchTeam, onSignOut }) {
+export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaunchTeam, onSignOut, theme = 'light', onToggleTheme }) {
   const teams = [
     {
       id: 'slmobbin',
       name: 'SLMobbin',
       avatarText: 'SLM',
-      avatarBg: '#121212',
-      avatarColor: '#FFFFFF',
+      avatarBg: 'var(--btn-black)',
+      avatarColor: 'var(--btn-black-text)',
       role: 'Owner · 5-Node Raft Cluster',
     },
     {
       id: 'asmobbin',
       name: 'ASMobbin',
       avatarText: 'A',
-      avatarBg: '#EAE6DF',
-      avatarColor: '#121212',
+      avatarBg: 'var(--bg-subtle)',
+      avatarColor: 'var(--text-primary)',
       role: 'Admin · Staging Swarm',
     },
   ];
@@ -25,7 +26,8 @@ export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaun
     <div
       style={{
         minHeight: '100vh',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'var(--bg-canvas)',
+        color: 'var(--text-primary)',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
@@ -35,17 +37,42 @@ export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaun
       {/* Top Header */}
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={onSignOut}>
-          <SunburstLogo size={24} color="#121212" />
+          <SunburstLogo size={24} color="var(--text-primary)" />
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {onToggleTheme && (
+            <button
+              onClick={onToggleTheme}
+              aria-label="Toggle dark mode"
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '34px',
+                height: '34px',
+                borderRadius: '6px',
+                border: '1px solid var(--border-subtle)',
+                backgroundColor: 'var(--bg-card)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-subtle)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card)')}
+            >
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+          )}
+
           <div
             style={{
               width: '36px',
               height: '36px',
               borderRadius: '50%',
-              backgroundColor: '#121212',
-              color: '#FFFFFF',
+              backgroundColor: 'var(--btn-black)',
+              color: 'var(--btn-black-text)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -65,20 +92,20 @@ export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaun
           style={{
             fontSize: '40px',
             fontWeight: 400,
-            color: '#121212',
+            color: 'var(--text-primary)',
             marginBottom: '6px',
             letterSpacing: '-0.02em',
           }}
         >
           Welcome, Sam
         </h1>
-        <p style={{ fontSize: '14px', color: '#737373', marginBottom: '36px' }}>
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '36px' }}>
           Select a team or create a new one.
         </p>
 
         {/* Teams List */}
         <div style={{ textAlign: 'left', marginBottom: '24px' }}>
-          <div style={{ fontSize: '13px', color: '#737373', marginBottom: '12px', fontWeight: 500 }}>
+          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px', fontWeight: 500 }}>
             Teams
           </div>
 
@@ -92,12 +119,12 @@ export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaun
                   justifyContent: 'space-between',
                   padding: '12px 14px',
                   borderRadius: '10px',
-                  border: '1px solid #EAE6DF',
-                  backgroundColor: '#FFFFFF',
+                  border: '1px solid var(--border-subtle)',
+                  backgroundColor: 'var(--bg-card)',
                   transition: 'border-color 0.15s, background-color 0.15s',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#FBFBFA')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#FFFFFF')}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-subtle)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card)')}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div
@@ -117,8 +144,8 @@ export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaun
                     {team.avatarText}
                   </div>
                   <div>
-                    <div style={{ fontSize: '14px', fontWeight: 500, color: '#121212' }}>{team.name}</div>
-                    <div style={{ fontSize: '12px', color: '#999996' }}>{team.role}</div>
+                    <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{team.name}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{team.role}</div>
                   </div>
                 </div>
 
@@ -126,23 +153,23 @@ export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaun
                   onClick={() => onLaunchTeam(team)}
                   style={{
                     padding: '7px 16px',
-                    border: '1px solid #EAE6DF',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: '6px',
-                    backgroundColor: '#FFFFFF',
-                    color: '#121212',
+                    backgroundColor: 'var(--bg-card)',
+                    color: 'var(--text-primary)',
                     fontSize: '13px',
                     fontWeight: 500,
                     transition: 'all 0.15s',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#121212';
-                    e.currentTarget.style.color = '#FFFFFF';
-                    e.currentTarget.style.borderColor = '#121212';
+                    e.currentTarget.style.backgroundColor = 'var(--btn-black)';
+                    e.currentTarget.style.color = 'var(--btn-black-text)';
+                    e.currentTarget.style.borderColor = 'var(--btn-black)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#FFFFFF';
-                    e.currentTarget.style.color = '#121212';
-                    e.currentTarget.style.borderColor = '#EAE6DF';
+                    e.currentTarget.style.backgroundColor = 'var(--bg-card)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
                   }}
                 >
                   Launch
@@ -158,14 +185,14 @@ export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaun
             display: 'flex',
             alignItems: 'center',
             gap: '16px',
-            color: '#A0A09C',
+            color: 'var(--text-tertiary)',
             fontSize: '13px',
             margin: '28px 0',
           }}
         >
-          <div style={{ flex: 1, borderTop: '1px dotted #D6D1C7' }} />
+          <div style={{ flex: 1, borderTop: '1px dotted var(--border-subtle)' }} />
           <span>Or</span>
-          <div style={{ flex: 1, borderTop: '1px dotted #D6D1C7' }} />
+          <div style={{ flex: 1, borderTop: '1px dotted var(--border-subtle)' }} />
         </div>
 
         {/* Create Team Button */}
@@ -175,15 +202,15 @@ export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaun
             width: '100%',
             padding: '12px',
             borderRadius: '8px',
-            border: '1px solid #EAE6DF',
-            backgroundColor: '#FFFFFF',
-            color: '#121212',
+            border: '1px solid var(--border-subtle)',
+            backgroundColor: 'var(--bg-card)',
+            color: 'var(--text-primary)',
             fontSize: '14px',
             fontWeight: 500,
             transition: 'background-color 0.15s',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F4F4F2')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#FFFFFF')}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-subtle)')}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card)')}
         >
           Create team
         </button>
@@ -196,11 +223,11 @@ export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaun
           alignItems: 'center',
           justifyContent: 'space-between',
           fontSize: '12px',
-          color: '#8C8C88',
+          color: 'var(--text-tertiary)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <SunburstLogo size={14} color="#8C8C88" />
+          <SunburstLogo size={14} color="var(--text-tertiary)" />
           <span>Quorum</span>
         </div>
         <div>Distributed Systems Platform</div>

@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: quorum-dashboard
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: "pip install -e backend && cd frontend && npm install && npm run build && cd .."
+    startCommand: "python scripts/run_dashboard.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: RENDER
+        value: "true"

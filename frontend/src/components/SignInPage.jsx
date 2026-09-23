@@ -150,30 +150,40 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
           </div>
         </div>
 
-        {/* Right 50% - Clean White Canvas */}
+        {/* Right 50% - Theme Canvas */}
         <div className="auth-right-side">
-          {/* Top Right Back Link */}
-          <button
-            onClick={onBackToHome}
+          {/* Top Right Controls (Back Link & Theme Toggle) */}
+          <div
             style={{
               position: 'absolute',
               top: '32px',
               right: '32px',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              fontSize: '13px',
-              color: '#737373',
-              padding: '6px 12px',
-              borderRadius: '6px',
-              transition: 'all 0.15s',
+              gap: '12px',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F4F4F2')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
-            <ArrowLeft size={14} />
-            <span>Back to home</span>
-          </button>
+
+
+            <button
+              onClick={onBackToHome}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                color: 'var(--text-secondary)',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-subtle)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <ArrowLeft size={14} />
+              <span>Back to home</span>
+            </button>
+          </div>
 
           {/* Form Card (Max 380px wide) */}
           <div style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
@@ -182,14 +192,14 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
               style={{
                 fontSize: '36px',
                 fontWeight: 400,
-                color: '#121212',
+                color: 'var(--text-primary)',
                 marginBottom: '8px',
                 letterSpacing: '-0.02em',
               }}
             >
               Welcome to Quorum
             </h1>
-            <p style={{ fontSize: '14px', color: '#737373', marginBottom: '32px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '32px' }}>
               Sign in or create an account
             </p>
 
@@ -207,14 +217,14 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
                       width: '100%',
                       padding: '13px 16px',
                       borderRadius: '8px',
-                      border: '1px solid #EAE6DF',
+                      border: '1px solid var(--border-subtle)',
                       fontSize: '14px',
-                      color: '#121212',
-                      backgroundColor: '#FFFFFF',
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-input)',
                       transition: 'border-color 0.2s',
                     }}
-                    onFocus={(e) => (e.target.style.borderColor = '#121212')}
-                    onBlur={(e) => (e.target.style.borderColor = '#EAE6DF')}
+                    onFocus={(e) => (e.target.style.borderColor = 'var(--btn-black)')}
+                    onBlur={(e) => (e.target.style.borderColor = 'var(--border-subtle)')}
                   />
                 </div>
 
@@ -237,14 +247,14 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '16px',
-                    color: '#999996',
+                    color: 'var(--text-tertiary)',
                     fontSize: '13px',
                     margin: '20px 0',
                   }}
                 >
-                  <div style={{ flex: 1, height: '1px', backgroundColor: '#EAE6DF' }} />
+                  <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-subtle)' }} />
                   <span>or</span>
-                  <div style={{ flex: 1, height: '1px', backgroundColor: '#EAE6DF' }} />
+                  <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-subtle)' }} />
                 </div>
 
                 <button
@@ -254,14 +264,14 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
                     width: '100%',
                     padding: '13px',
                     borderRadius: '8px',
-                    backgroundColor: '#121212',
-                    color: '#FFFFFF',
+                    backgroundColor: 'var(--btn-black)',
+                    color: 'var(--btn-black-text)',
                     fontSize: '14px',
                     fontWeight: 500,
                     transition: 'background-color 0.2s',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#262626')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#121212')}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--btn-black-hover)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--btn-black)')}
                 >
                   Show other options
                 </button>
@@ -282,17 +292,20 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
                       onClick={() => onCompleteAuth('sam@mobbin.design')}
                       style={{
                         padding: '11px',
-                        border: '1px solid #EAE6DF',
+                        border: '1px solid var(--border-subtle)',
                         borderRadius: '8px',
                         fontSize: '13px',
                         fontWeight: 500,
-                        color: '#121212',
-                        backgroundColor: '#F7F6F2',
+                        color: 'var(--text-primary)',
+                        backgroundColor: 'var(--bg-subtle)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px',
+                        transition: 'background-color 0.15s',
                       }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-warm)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-subtle)')}
                     >
                       <Sparkles size={14} color="#059669" />
                       <span>One-Click Demo Bypass (Sign in as Sam)</span>
@@ -320,7 +333,7 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
                   ))}
                 </div>
 
-                <div style={{ fontSize: '13px', color: '#737373', marginBottom: '24px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
                   Didn't receive the email?{' '}
                   <span
                     onClick={() => {
@@ -328,7 +341,7 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
                       setTimeout(() => onCompleteAuth(email || 'sam@mobbin.design'), 400);
                     }}
                     style={{
-                      color: '#121212',
+                      color: 'var(--text-primary)',
                       textDecoration: 'underline',
                       cursor: 'pointer',
                       fontWeight: 500,
@@ -343,14 +356,14 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '16px',
-                    color: '#999996',
+                    color: 'var(--text-tertiary)',
                     fontSize: '13px',
                     margin: '20px 0',
                   }}
                 >
-                  <div style={{ flex: 1, height: '1px', backgroundColor: '#EAE6DF' }} />
+                  <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-subtle)' }} />
                   <span>or</span>
-                  <div style={{ flex: 1, height: '1px', backgroundColor: '#EAE6DF' }} />
+                  <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-subtle)' }} />
                 </div>
 
                 <button
@@ -360,11 +373,14 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
                     width: '100%',
                     padding: '13px',
                     borderRadius: '8px',
-                    backgroundColor: '#121212',
-                    color: '#FFFFFF',
+                    backgroundColor: 'var(--btn-black)',
+                    color: 'var(--btn-black-text)',
                     fontSize: '14px',
                     fontWeight: 500,
+                    transition: 'background-color 0.2s',
                   }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--btn-black-hover)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--btn-black)')}
                 >
                   Show other options
                 </button>
@@ -372,10 +388,10 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
             )}
 
             {/* Footer Terms */}
-            <div style={{ marginTop: '48px', fontSize: '12px', color: '#999996', lineHeight: 1.5 }}>
+            <div style={{ marginTop: '48px', fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
               By signing in you agree to our{' '}
-              <a href="#terms" style={{ textDecoration: 'underline' }}>Terms of service</a> &amp;{' '}
-              <a href="#privacy" style={{ textDecoration: 'underline' }}>Privacy policy</a>
+              <a href="#terms" style={{ textDecoration: 'underline', color: 'var(--text-secondary)' }}>Terms of service</a> &amp;{' '}
+              <a href="#privacy" style={{ textDecoration: 'underline', color: 'var(--text-secondary)' }}>Privacy policy</a>
             </div>
           </div>
         </div>
