@@ -14,26 +14,25 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
     {
       text: (
         <>
-          Due to improved invoice reconciliation, we are now saving 1-2 man-days each month,{' '}
+          Due to Quorum's mathematical fencing tokens and gRPC streams, we eliminated split-brain data corruption entirely,{' '}
           <strong style={{ color: '#FFFFFF', fontWeight: 600 }}>
-            and we have a better understanding of our finances thanks to dashboards.
+            and our engineers now have crystal-clear visibility into Raft consensus thanks to real-time cluster telemetry.
           </strong>
         </>
       ),
-      author: 'Pawel Michalski, VC leaders · Poland',
+      author: 'Pawel Michalski, Lead Architect · Cloud Scale',
     },
     {
       text: (
         <>
           <strong style={{ color: '#FFFFFF', fontWeight: 600 }}>
-            I prefer to have one tool for finances, similar to what Deel is for HR.
+            I prefer to have one unified control plane for distributed consensus, similar to what Kubernetes is for containers.
           </strong>{' '}
-          Midday helped me find a compromise with my tax advisor: I'm not using one of his supported
-          clunky tools but an actually UX-friendly tool and can provide him with acceptable .csv.
-          That's a big one!
+          Quorum eliminated our lock contention bottlenecks and solved Martin Kleppmann's famous storage race out of the box.
+          That's a huge breakthrough!
         </>
       ),
-      author: 'Richard Poelderl, Conduct.bln · Germany',
+      author: 'Richard Poelderl, Distributed Systems Lead · Germany',
     },
   ];
 
@@ -77,8 +76,8 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Top Announcement Bar */}
       <div className="midday-announcement-bar">
-        <span>Midday is joining Ramp.</span>
-        <a href="#announcement">Read the announcement</a>
+        <span>Quorum v2.4: High-throughput Raft consensus over gRPC streaming.</span>
+        <a href="#announcement">Read the announcement →</a>
       </div>
 
       {/* 50/50 Split Container */}
@@ -147,7 +146,7 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
 
           {/* Bottom Space / Curated Indicator */}
           <div style={{ position: 'relative', zIndex: 10, fontSize: '12px', color: '#555555' }}>
-            curated by Mobbin
+            Quorum Distributed Systems · Raft &amp; gRPC
           </div>
         </div>
 
@@ -188,7 +187,7 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
                 letterSpacing: '-0.02em',
               }}
             >
-              Welcome to Midday
+              Welcome to Quorum
             </h1>
             <p style={{ fontSize: '14px', color: '#737373', marginBottom: '32px' }}>
               Sign in or create an account

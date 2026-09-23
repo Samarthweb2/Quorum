@@ -201,9 +201,9 @@ export default function TeamSelectPage({ userEmail = 'sam@mobbin.design', onLaun
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <SunburstLogo size={14} color="#8C8C88" />
-          <span>Midday</span>
+          <span>Quorum</span>
         </div>
-        <div>curated by Mobbin</div>
+        <div>Distributed Systems Platform</div>
       </footer>
     </div>
   );
