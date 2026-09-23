@@ -16,9 +16,11 @@ import {
   Plus,
   ArrowUp,
   Sparkles,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
-export default function LandingPage({ onSignIn, onLaunchCluster, status }) {
+export default function LandingPage({ onSignIn, onLaunchCluster, status, theme = 'light', onToggleTheme }) {
   const [activeFeature, setActiveFeature] = useState(0);
 
   return (
@@ -536,36 +538,151 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status }) {
         </div>
       </section>
 
-      {/* 6. Footer matching Midday style */}
+      {/* 6. Footer (exact match to Midday Screenshot / "Last Page") */}
       <footer
         style={{
-          borderTop: '1px solid #EAE6DF',
-          backgroundColor: '#FBFBFA',
-          padding: '48px 24px',
+          borderTop: '1px solid var(--border-subtle)',
+          backgroundColor: 'var(--bg-canvas)',
+          paddingTop: '64px',
+          overflow: 'hidden',
+          position: 'relative',
         }}
       >
-        <div
-          style={{
-            maxWidth: '1200px',
-            margin: '0 auto',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '13px',
-            color: '#737373',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <SunburstLogo size={18} color="#121212" />
-            <span style={{ fontWeight: 600, color: '#121212' }}>Quorum</span>
-            <span>— The business stack for modern distributed systems.</span>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
+          {/* Top Row: Links and Dark Mode Toggle (matching Screenshot) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              marginBottom: '56px',
+            }}
+          >
+            {/* Left: Sunburst and Link Columns */}
+            <div style={{ display: 'flex', gap: '64px', alignItems: 'flex-start' }}>
+              <div style={{ marginTop: '2px' }}>
+                <SunburstLogo size={24} color="var(--text-primary)" />
+              </div>
+
+              {/* Column 1 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                <a href="#files" style={{ transition: 'color 0.15s' }}>Files</a>
+                <a href="#exports" style={{ transition: 'color 0.15s' }}>Exports</a>
+                <a href="#assistant" style={{ transition: 'color 0.15s' }}>Assistant</a>
+              </div>
+
+              {/* Column 2 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                <a href="#sdks" style={{ transition: 'color 0.15s' }}>SDKs</a>
+                <a href="#support" style={{ transition: 'color 0.15s' }}>Support</a>
+                <a href="#privacy" style={{ transition: 'color 0.15s' }}>Privacy Policy</a>
+                <a href="#terms" style={{ transition: 'color 0.15s' }}>Terms of Service</a>
+              </div>
+            </div>
+
+            {/* Right: Dark / Light Mode Button (exact Screenshot position) */}
+            <div>
+              <button
+                onClick={onToggleTheme}
+                aria-label="Toggle dark mode"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 14px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-subtle)',
+                  backgroundColor: 'var(--bg-card)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-subtle)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card)')}
+              >
+                {theme === 'dark' ? (
+                  <>
+                    <Sun size={14} />
+                    <span>Light mode</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon size={14} />
+                    <span>Dark mode</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '24px' }}>
-            <a href="#privacy">Privacy policy</a>
-            <a href="#terms">Terms of service</a>
-            <a href="https://github.com" target="_blank" rel="noreferrer">GitHub</a>
+          {/* Status & Copyright Row (matching Screenshot) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingBottom: '24px',
+              fontSize: '13px',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>System status:</span>
+              <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Operational</span>
+              <span
+                style={{
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  backgroundColor: '#10B981',
+                  boxShadow: '0 0 8px rgba(16, 185, 129, 0.6)',
+                  display: 'inline-block',
+                }}
+              />
+            </div>
+
+            <div>
+              © 2026 Quorum Labs AB. All rights reserved.
+            </div>
           </div>
+        </div>
+
+        {/* Colossal Outline Typography: quorum (spanning edge to edge matching Screenshot) */}
+        <div
+          style={{
+            width: '100%',
+            overflow: 'hidden',
+            lineHeight: 0,
+            marginTop: '8px',
+            marginBottom: '-14px',
+            userSelect: 'none',
+            pointerEvents: 'none',
+          }}
+        >
+          <svg
+            viewBox="0 0 1400 240"
+            width="100%"
+            height="auto"
+            style={{ display: 'block' }}
+          >
+            <text
+              x="50%"
+              y="88%"
+              textAnchor="middle"
+              fill="var(--big-text-fill)"
+              stroke="var(--big-text-stroke)"
+              strokeWidth="1.5"
+              fontFamily="var(--font-sans)"
+              fontWeight="500"
+              letterSpacing="-0.035em"
+              fontSize="270"
+            >
+              quorum
+            </text>
+          </svg>
         </div>
       </footer>
     </div>

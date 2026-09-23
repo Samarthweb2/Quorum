@@ -9,16 +9,27 @@ export default function App() {
   const [userEmail, setUserEmail] = useState('sam@mobbin.design');
   const [selectedTeam, setSelectedTeam] = useState({ id: 'slmobbin', name: 'SLMobbin' });
   const [status, setStatus] = useState(null);
-  // Enforce pure light theme
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('quorum-theme') || 'light';
+  });
+
   useEffect(() => {
-    document.documentElement.classList.remove('dark');
-    document.documentElement.removeAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
     try {
-      localStorage.removeItem('quorum-theme');
+      localStorage.setItem('quorum-theme', theme);
     } catch (e) {
       // ignore
     }
-  }, []);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
 
   const addToast = useCallback((msg, type = 'info') => {
     const id = Date.now();
@@ -124,12 +135,14 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', position: 'relative' }}>
-      {/* 1. LANDING PAGE (Screenshot 1) */}
+      {/* 1. LANDING PAGE (Screenshot 1 & Last Page Footer) */}
       {view === 'landing' && (
         <LandingPage
           onSignIn={() => setView('signin')}
           onLaunchCluster={() => setView('control_panel')}
           status={status}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       )}
 
