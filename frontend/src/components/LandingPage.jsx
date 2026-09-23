@@ -10,14 +10,19 @@ import {
   Lock,
   GitBranch,
   Terminal,
-  Activity
+  Activity,
+  LayoutGrid,
+  Search,
+  Plus,
+  ArrowUp,
+  Sparkles,
 } from 'lucide-react';
 
 export default function LandingPage({ onSignIn, onLaunchCluster, status }) {
   const [activeFeature, setActiveFeature] = useState(0);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#FFFFFF', color: '#121212' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-canvas)', color: 'var(--text-primary)', transition: 'background-color 0.2s, color 0.2s' }}>
       {/* 1. Top Announcement Bar */}
       <div className="midday-announcement-bar">
         <span>Quorum v2.4: High-throughput Raft consensus over gRPC streaming.</span>
@@ -36,11 +41,11 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-          <SunburstLogo size={22} color="#121212" />
+          <SunburstLogo size={22} color="var(--text-primary)" />
           <span style={{ fontWeight: 600, fontSize: '17px', letterSpacing: '-0.01em' }}>Quorum</span>
         </div>
 
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '28px', fontSize: '14px', color: '#666664' }}>
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '28px', fontSize: '14px', color: 'var(--text-secondary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
             <span>Features</span>
             <ChevronDown size={14} />
@@ -52,19 +57,17 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status }) {
             <ChevronDown size={14} />
           </div>
 
-          <div style={{ width: '1px', height: '18px', backgroundColor: '#EAE6DF', margin: '0 4px' }} />
-
           <button
             onClick={onSignIn}
             style={{
               fontWeight: 500,
-              color: '#121212',
+              color: 'var(--text-primary)',
               fontSize: '14px',
               padding: '6px 12px',
               borderRadius: '6px',
               transition: 'background-color 0.15s',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F4F4F2')}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-subtle)')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             Sign in
@@ -98,7 +101,7 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status }) {
             lineHeight: 1.06,
             fontWeight: 400,
             letterSpacing: '-0.025em',
-            color: '#121212',
+            color: 'var(--text-primary)',
             maxWidth: '860px',
             marginBottom: '20px',
           }}
@@ -111,7 +114,7 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status }) {
           style={{
             fontSize: '17px',
             lineHeight: 1.55,
-            color: '#666664',
+            color: 'var(--text-secondary)',
             maxWidth: '680px',
             marginBottom: '32px',
           }}
@@ -171,112 +174,133 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status }) {
       {/* 4. Atmospheric Dark Preview Frame (matching Screenshot 1) */}
       <section
         style={{
-          maxWidth: '1200px',
-          margin: '52px auto 0',
-          padding: '0 24px',
+          width: '100%',
+          backgroundColor: '#09090A',
+          backgroundImage: 'radial-gradient(ellipse at 50% 12%, #222225 0%, #121214 50%, #060607 100%)',
+          marginTop: '64px',
+          padding: '64px 24px 0',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
+        {/* Subtle Ambient Grain/Light */}
         <div
           style={{
-            backgroundColor: '#0C0C0C',
-            borderRadius: '20px 20px 0 0',
-            border: '1px solid #242424',
-            borderBottom: 'none',
-            padding: '48px 36px 0',
-            position: 'relative',
-            overflow: 'hidden',
-            boxShadow: '0 30px 80px -20px rgba(0,0,0,0.3)',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '240px',
+            background: 'radial-gradient(circle at 50% 0%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0) 70%)',
+            pointerEvents: 'none',
           }}
-        >
-          {/* Subtle Ambient Grain/Glow */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '-150px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '800px',
-              height: '350px',
-              background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0) 70%)',
-              pointerEvents: 'none',
-            }}
-          />
+        />
 
-          {/* Clean Dashboard Preview Window */}
+        {/* Clean Dashboard Preview Window matching Screenshot 1 (no thick bezel/box) */}
+        <div
+          onClick={onLaunchCluster}
+          style={{
+            maxWidth: '1100px',
+            margin: '0 auto',
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px 12px 0 0',
+            border: '1px solid rgba(255, 255, 255, 0.14)',
+            borderBottom: 'none',
+            boxShadow: '0 32px 100px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0,0,0,0.04)',
+            display: 'flex',
+            cursor: 'pointer',
+            transition: 'transform 0.25s ease',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-3px)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+        >
+          {/* Left Mini Dock (matching Screenshot 1) */}
           <div
-            onClick={onLaunchCluster}
             style={{
+              width: '56px',
+              borderRight: '1px solid #F0EDE6',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              padding: '16px 0',
+              gap: '16px',
               backgroundColor: '#FFFFFF',
-              borderRadius: '12px 12px 0 0',
-              border: '1px solid #EAE6DF',
-              borderBottom: 'none',
-              padding: '24px 28px 40px',
-              cursor: 'pointer',
-              transition: 'transform 0.25s ease',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-4px)')}
-            onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
           >
-            {/* Window Topbar */}
+            <SunburstLogo size={20} color="#121212" />
             <div
               style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '6px',
+                border: '1px solid #EAE6DF',
+                backgroundColor: '#F7F6F2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#121212',
+              }}
+            >
+              <LayoutGrid size={15} />
+            </div>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#8C8C88',
+              }}
+            >
+              <Activity size={15} />
+            </div>
+          </div>
+
+          {/* Right Window Body */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {/* Topbar (matching Screenshot 1) */}
+            <div
+              style={{
+                height: '52px',
+                borderBottom: '1px solid #F0EDE6',
+                padding: '0 24px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                paddingBottom: '18px',
-                borderBottom: '1px solid #F0EDE6',
-                marginBottom: '24px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <SunburstLogo size={20} color="#121212" />
-                <div
-                  style={{
-                    backgroundColor: '#F7F6F2',
-                    border: '1px solid #EAE6DF',
-                    borderRadius: '8px',
-                    padding: '6px 14px',
-                    fontSize: '13px',
-                    color: '#8C8C88',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    width: '280px',
-                  }}
-                >
-                  <span>🔍</span>
-                  <span>Find anything...</span>
-                </div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: '#FBFBFA',
+                  border: '1px solid #F0EDE6',
+                  color: '#8C8C88',
+                  fontSize: '13px',
+                  width: '240px',
+                }}
+              >
+                <Search size={14} color="#8C8C88" />
+                <span>Find anything...</span>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    color: '#059669',
-                    backgroundColor: 'rgba(5, 150, 105, 0.08)',
-                    padding: '4px 10px',
-                    borderRadius: '9999px',
-                  }}
-                >
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#059669' }} />
-                  <span>5 Nodes Healthy</span>
-                </div>
-                <div
-                  style={{
-                    width: '32px',
-                    height: '32px',
+                    width: '28px',
+                    height: '28px',
                     borderRadius: '50%',
-                    backgroundColor: '#121212',
+                    backgroundColor: '#1E293B',
                     color: '#FFFFFF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '12px',
+                    fontSize: '11px',
                     fontWeight: 600,
                   }}
                 >
@@ -285,58 +309,186 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status }) {
               </div>
             </div>
 
-            {/* Window Content Greeting (matching Screenshot 1: Morning Viktor) */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'flex-end',
-                justifyContent: 'space-between',
-                marginBottom: '24px',
-              }}
-            >
-              <div>
-                <h2 className="font-serif" style={{ fontSize: '36px', fontWeight: 400, color: '#121212' }}>
-                  Morning Viktor
-                </h2>
-                <p style={{ fontSize: '13px', color: '#666664' }}>
-                  here's a quick look at how things are going across the cluster.
-                </p>
+            {/* Window Content */}
+            <div style={{ padding: '26px 30px 48px' }}>
+              {/* Header Greeting & Controls (matching Screenshot 1) */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  justifyContent: 'space-between',
+                  marginBottom: '24px',
+                }}
+              >
+                <div>
+                  <h2 className="font-serif" style={{ fontSize: '36px', fontWeight: 400, color: '#121212', lineHeight: 1.1 }}>
+                    Morning Viktor
+                  </h2>
+                  <p style={{ fontSize: '13px', color: '#737373', marginTop: '4px' }}>
+                    here's a quick look at how things are going across the cluster.
+                  </p>
+                </div>
+
+                {/* Right controls: grid icon, 1 year dropdown, Overview / Metrics tabs */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                  <button
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '6px',
+                      border: '1px solid #EAE6DF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#737373',
+                      backgroundColor: '#FFFFFF',
+                    }}
+                  >
+                    <LayoutGrid size={13} />
+                  </button>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #EAE6DF',
+                      color: '#121212',
+                      fontWeight: 500,
+                      backgroundColor: '#FFFFFF',
+                    }}
+                  >
+                    <span>1 year</span>
+                    <ChevronDown size={12} color="#737373" />
+                  </div>
+
+                  <div style={{ display: 'flex', border: '1px solid #EAE6DF', borderRadius: '6px', padding: '2px', backgroundColor: '#FFFFFF' }}>
+                    <span
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: '4px',
+                        backgroundColor: '#F4F4F2',
+                        color: '#121212',
+                        fontWeight: 500,
+                      }}
+                    >
+                      Overview
+                    </span>
+                    <span style={{ padding: '4px 12px', color: '#737373' }}>
+                      Metrics
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                <span style={{ padding: '6px 12px', border: '1px solid #EAE6DF', borderRadius: '6px', color: '#121212', fontWeight: 500 }}>
-                  Overview
-                </span>
-                <span style={{ padding: '6px 12px', color: '#737373' }}>
-                  Metrics
-                </span>
+              {/* Midday AI Command Bar & Cluster Actions */}
+              <div
+                style={{
+                  marginBottom: '20px',
+                  padding: '12px 18px',
+                  backgroundColor: '#FBFBFA',
+                  border: '1px solid #EAE6DF',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#8C8C88', fontSize: '13px' }}>
+                  <Sparkles size={15} color="#121212" />
+                  <span>How can I help you across the Quorum cluster today?</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#8C8C88' }}>
+                  <span style={{ fontSize: '14px', cursor: 'pointer' }}>+</span>
+                  <Zap size={13} />
+                  <span style={{ fontSize: '13px' }}>@</span>
+                  <div
+                    style={{
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '6px',
+                      backgroundColor: '#121212',
+                      color: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <ArrowUp size={13} />
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Metric Cards Snippet */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-              <div style={{ padding: '16px', border: '1px solid #EAE6DF', borderRadius: '10px' }}>
-                <div style={{ fontSize: '12px', color: '#737373', marginBottom: '4px' }}>Cluster Consensus</div>
-                <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>99.99%</div>
-                <div style={{ fontSize: '12px', color: '#059669', marginTop: '4px' }}>Raft Term 14 active</div>
+              {/* Action Quick Pills */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '22px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid #EAE6DF', backgroundColor: '#FFFFFF', color: '#121212', fontWeight: 500 }}>
+                  📄 Replicate Log
+                </span>
+                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid #EAE6DF', backgroundColor: '#FFFFFF', color: '#121212', fontWeight: 500 }}>
+                  ⚡ Elect Leader
+                </span>
+                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid #EAE6DF', backgroundColor: '#FFFFFF', color: '#121212', fontWeight: 500 }}>
+                  🛡️ Fencing Lease
+                </span>
+                <span style={{ fontSize: '12px', padding: '5px 11px', borderRadius: '6px', border: '1px solid #EAE6DF', backgroundColor: '#FFFFFF', color: '#121212', fontWeight: 500 }}>
+                  🔍 Inspect State
+                </span>
               </div>
-              <div style={{ padding: '16px', border: '1px solid #EAE6DF', borderRadius: '10px' }}>
-                <div style={{ fontSize: '12px', color: '#737373', marginBottom: '4px' }}>gRPC Streaming Latency</div>
-                <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>1.2ms</div>
-                <div style={{ fontSize: '12px', color: '#737373', marginTop: '4px' }}>p99 &lt; 3.2ms</div>
-              </div>
-              <div style={{ padding: '16px', border: '1px solid #EAE6DF', borderRadius: '10px' }}>
-                <div style={{ fontSize: '12px', color: '#737373', marginBottom: '4px' }}>Committed Log Index</div>
-                <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>1,842</div>
-                <div style={{ fontSize: '12px', color: '#737373', marginTop: '4px' }}>Zero uncommitted diffs</div>
-              </div>
-              <div style={{ padding: '16px', border: '1px solid #EAE6DF', borderRadius: '10px' }}>
-                <div style={{ fontSize: '12px', color: '#737373', marginBottom: '4px' }}>Fencing Lock Leases</div>
-                <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>3 Active</div>
-                <div style={{ fontSize: '12px', color: '#059669', marginTop: '4px' }}>0 Split-brain violations</div>
+
+              {/* 4 Clean Metric Cards (matching Screenshot 1) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+                <div style={{ padding: '18px', border: '1px solid #EAE6DF', borderRadius: '10px', backgroundColor: '#FFFFFF' }}>
+                  <div style={{ fontSize: '12px', color: '#737373', marginBottom: '6px' }}>Cluster Consensus</div>
+                  <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>99.99%</div>
+                  <div style={{ fontSize: '12px', color: '#059669', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#059669' }} />
+                    <span>Raft Term 14 active</span>
+                  </div>
+                </div>
+
+                <div style={{ padding: '18px', border: '1px solid #EAE6DF', borderRadius: '10px', backgroundColor: '#FFFFFF' }}>
+                  <div style={{ fontSize: '12px', color: '#737373', marginBottom: '6px' }}>gRPC Streaming Latency</div>
+                  <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>1.2ms</div>
+                  <div style={{ fontSize: '12px', color: '#737373', marginTop: '6px' }}>p99 &lt; 3.2ms</div>
+                </div>
+
+                <div style={{ padding: '18px', border: '1px solid #EAE6DF', borderRadius: '10px', backgroundColor: '#FFFFFF' }}>
+                  <div style={{ fontSize: '12px', color: '#737373', marginBottom: '6px' }}>Committed Log Index</div>
+                  <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>1,842</div>
+                  <div style={{ fontSize: '12px', color: '#737373', marginTop: '6px' }}>Zero uncommitted diffs</div>
+                </div>
+
+                <div style={{ padding: '18px', border: '1px solid #EAE6DF', borderRadius: '10px', backgroundColor: '#FFFFFF' }}>
+                  <div style={{ fontSize: '12px', color: '#737373', marginBottom: '6px' }}>Fencing Lock Leases</div>
+                  <div style={{ fontSize: '24px', fontWeight: 500, color: '#121212' }}>3 Active</div>
+                  <div style={{ fontSize: '12px', color: '#059669', marginTop: '6px' }}>0 Split-brain violations</div>
+                </div>
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Bottom Bar inside Dark Section (matching Screenshot 1: * Midday / curated by Mobbin) */}
+        <div
+          style={{
+            maxWidth: '1100px',
+            margin: '0 auto',
+            borderTop: '1px solid #222222',
+            padding: '16px 0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            color: '#737373',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <SunburstLogo size={16} color="#A0A0A0" />
+            <span style={{ color: '#FFFFFF', fontWeight: 500 }}>Quorum</span>
+          </div>
+          <div>curated by Mobbin · Raft &amp; gRPC</div>
         </div>
       </section>
 

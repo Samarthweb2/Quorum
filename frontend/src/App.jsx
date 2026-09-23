@@ -9,8 +9,16 @@ export default function App() {
   const [userEmail, setUserEmail] = useState('sam@mobbin.design');
   const [selectedTeam, setSelectedTeam] = useState({ id: 'slmobbin', name: 'SLMobbin' });
   const [status, setStatus] = useState(null);
-  const [toasts, setToasts] = useState([]);
-  const wsRef = useRef(null);
+  // Enforce pure light theme
+  useEffect(() => {
+    document.documentElement.classList.remove('dark');
+    document.documentElement.removeAttribute('data-theme');
+    try {
+      localStorage.removeItem('quorum-theme');
+    } catch (e) {
+      // ignore
+    }
+  }, []);
 
   const addToast = useCallback((msg, type = 'info') => {
     const id = Date.now();

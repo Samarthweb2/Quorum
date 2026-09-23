@@ -35,7 +35,6 @@
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-card: 0 4px 16px -2px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
-  --shadow-float: 0 20px 40px -10px rgba(0, 0, 0, 0.08);
 }
 
 *, *::before, *::after {
@@ -283,20 +282,20 @@ input, textarea, select {
   font-size: 24px;
   font-weight: 500;
   color: var(--text-primary);
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   transition: all 0.2s ease;
 }
 
 .otp-box:focus {
-  border-color: #121212;
-  box-shadow: 0 0 0 1px #121212;
+  border-color: var(--btn-black);
+  box-shadow: 0 0 0 1px var(--btn-black);
 }
 
 /* Slim Sidebar Dock (64px) */
 .midday-dock {
   width: 64px;
   height: 100vh;
-  background-color: #FFFFFF;
+  background-color: var(--bg-card);
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
@@ -316,19 +315,19 @@ input, textarea, select {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #737373;
+  color: var(--text-tertiary);
   transition: all 0.15s ease;
   position: relative;
 }
 
 .dock-icon-btn:hover {
-  background-color: #F4F4F2;
-  color: #121212;
+  background-color: var(--bg-subtle);
+  color: var(--text-primary);
 }
 
 .dock-icon-btn.active {
-  background-color: #F4F4F2;
-  color: #121212;
+  background-color: var(--bg-subtle);
+  color: var(--text-primary);
 }
 
 /* Animations */
