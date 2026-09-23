@@ -170,6 +170,13 @@ class ZombieSimReq(BaseModel):
 # REST Endpoints
 # =============================================================================
 
+@app.get("/health")
+@app.get("/healthz")
+async def health_check():
+    """Health check endpoint for Render, load balancers, and container orchestration."""
+    return {"status": "ok", "service": "quorum-cluster-gateway"}
+
+
 @app.get("/api/nodes")
 async def get_nodes():
     """Returns list of all nodes with id, role, current_term, commit_index, last_heartbeat_at, log_length."""
