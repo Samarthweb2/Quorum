@@ -12,12 +12,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from quorum.gateway.cluster_controller import ClusterController
+from quorum.gateway.auth import AuthStore, bearer_token
 from quorum.ai.coordinator import AgentSwarmCoordinator
 
 logger = logging.getLogger("quorum.gateway.app")
@@ -25,6 +27,7 @@ logger = logging.getLogger("quorum.gateway.app")
 # Global cluster controller and AI coordinator instances
 controller: Optional[ClusterController] = None
 ai_coordinator: Optional[AgentSwarmCoordinator] = None
+auth_store = AuthStore()
 connected_websockets: Set[WebSocket] = set()
 
 
@@ -166,6 +169,32 @@ class ZombieSimReq(BaseModel):
     resource_name: str = Field(default="production-orders-db")
 
 
+class AuthCredentials(BaseModel):
+    email: str
+    password: str
+    name: str = ""
+
+
+class AuthEmailReq(BaseModel):
+    email: str
+    purpose: str = "signup"
+
+
+class AuthVerifyReq(BaseModel):
+    email: str
+    code: str
+
+
+class AuthResetReq(BaseModel):
+    email: str
+    code: str
+    password: str
+
+
+class AiChatReq(BaseModel):
+    message: str = Field(..., min_length=1, max_length=4000)
+
+
 # =============================================================================
 # REST Endpoints
 # =============================================================================
@@ -175,6 +204,57 @@ class ZombieSimReq(BaseModel):
 async def health_check():
     """Health check endpoint for Render, load balancers, and container orchestration."""
     return {"status": "ok", "service": "quorum-cluster-gateway"}
+
+
+def _auth_json(code: int, payload: Dict[str, Any]):
+    return JSONResponse(status_code=code, content=payload)
+
+
+@app.post("/api/auth/signup")
+async def signup(req: AuthCredentials):
+    code, payload = auth_store.signup(req.email, req.password, req.name)
+    return _auth_json(code, payload)
+
+
+@app.post("/api/auth/signin")
+async def signin(req: AuthCredentials):
+    code, payload = auth_store.signin(req.email, req.password)
+    return _auth_json(code, payload)
+
+
+@app.post("/api/auth/verify")
+async def verify_email(req: AuthVerifyReq):
+    code, payload = auth_store.verify_email(req.email, req.code)
+    return _auth_json(code, payload)
+
+
+@app.post("/api/auth/resend-otp")
+async def resend_otp(req: AuthEmailReq):
+    code, payload = auth_store.resend_otp(req.email, req.purpose)
+    return _auth_json(code, payload)
+
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(req: AuthEmailReq):
+    code, payload = auth_store.forgot_password(req.email)
+    return _auth_json(code, payload)
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(req: AuthResetReq):
+    code, payload = auth_store.reset_password(req.email, req.code, req.password)
+    return _auth_json(code, payload)
+
+
+@app.get("/api/auth/me")
+async def auth_me(authorization: Optional[str] = Header(default=None)):
+    code, payload = auth_store.me(bearer_token(authorization))
+    return _auth_json(code, payload)
+
+
+@app.post("/api/auth/signout")
+async def signout(authorization: Optional[str] = Header(default=None)):
+    return auth_store.signout(bearer_token(authorization))
 
 
 @app.get("/api/nodes")
@@ -398,6 +478,14 @@ async def get_ai_status(resource: str = "shared-financial-ledger"):
     if not ai_coordinator:
         raise HTTPException(status_code=503, detail="AI Coordinator not initialized")
     return ai_coordinator.get_status(resource)
+
+
+@app.post("/api/ai/chat")
+async def ai_chat(req: AiChatReq):
+    """Conversational operator assistant grounded in live cluster state."""
+    if not ai_coordinator:
+        raise HTTPException(status_code=503, detail="AI Coordinator not initialized")
+    return await ai_coordinator.answer_question(req.message)
 
 
 @app.post("/api/ai/simulate")

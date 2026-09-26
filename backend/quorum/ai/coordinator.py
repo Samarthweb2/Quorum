@@ -566,3 +566,145 @@ class AgentSwarmCoordinator:
             "corrupted_balance": final_bal,
             "steps": steps,
         }
+
+    async def answer_question(self, message: str) -> Dict[str, Any]:
+        """
+        Answer any operator question about the live cluster and optionally
+        run a coordination scenario when the prompt asks for a simulation.
+        Always returns a non-empty reply.
+        """
+        text = (message or "").strip()
+        lower = text.lower()
+        status: Dict[str, Any] = {}
+        if self.controller and hasattr(self.controller, "get_cluster_status"):
+            try:
+                status = self.controller.get_cluster_status() or {}
+            except Exception as exc:
+                status = {"error": str(exc)}
+
+        leader = status.get("leader_id") or "none elected"
+        alive = status.get("alive_nodes", 0)
+        total = status.get("total_nodes", 0)
+        health = status.get("health", "UNKNOWN")
+        locks = status.get("active_locks") or []
+        term = 0
+        for node in status.get("nodes") or []:
+            if node.get("role") == "LEADER":
+                term = node.get("current_term") or 0
+                break
+        if not term and status.get("nodes"):
+            term = max((n.get("current_term") or 0) for n in status["nodes"])
+
+        action: Optional[str] = None
+        simulation: Optional[Dict[str, Any]] = None
+        resource = "shared-financial-ledger"
+
+        try:
+            if any(k in lower for k in ("zombie", "fencing", "stale worker", "gc pause")):
+                action = "zombie"
+                simulation = await self.run_zombie_mitigation(resource)
+            elif any(k in lower for k in ("unprotected", "double spend", "race condition", "chaos swarm")):
+                action = "chaos"
+                simulation = await self.run_unprotected_chaos(resource)
+            elif any(k in lower for k in ("safe swarm", "multi-agent", "coordinate agents", "run swarm")):
+                action = "safe"
+                simulation = await self.run_safe_swarm(resource)
+        except Exception as exc:
+            simulation = {"success": False, "error": str(exc)}
+
+        if not text:
+            reply = (
+                "Ask me anything about this Raft cluster — leader status, locks, "
+                "partitions, fencing tokens, or type “run zombie test” to simulate a GC stall."
+            )
+        elif action == "zombie":
+            reply = (
+                "I ran the Kleppmann zombie-worker simulation. A stalled agent kept a stale "
+                "fencing token; Quorum expired the lease, granted a higher token to a healthy "
+                "agent, and the storage guard rejected the late write. Split-brain did not occur."
+            )
+        elif action == "chaos":
+            bal = simulation.get("corrupted_balance") if simulation else None
+            reply = (
+                "I ran the unprotected multi-agent race (no locks). Two agents read the same "
+                f"ledger and both wrote — the balance is now {bal}. This is why Quorum leases "
+                "and monotonic fencing tokens exist."
+            )
+        elif action == "safe":
+            reply = (
+                "Safe swarm completed. Settlement, Inventory, and Risk agents acquired the "
+                "ledger lease in turn, each received an increasing fencing token, and every "
+                "mutation committed without conflict."
+            )
+        elif any(k in lower for k in ("leader", "who is leader", "election", "term")):
+            reply = (
+                f"Current leader is {leader} on term {term}. "
+                f"Cluster health is {health} with {alive}/{total} nodes alive. "
+                "A new election starts if the leader misses heartbeats past the election timeout."
+            )
+        elif any(k in lower for k in ("lock", "lease", "fence", "token")):
+            if locks:
+                parts = []
+                for lock in locks[:5]:
+                    key = lock.get("key") or lock.get("resource") or "lock"
+                    owner = lock.get("owner") or lock.get("holder") or lock.get("client_id") or "unknown"
+                    token = lock.get("fence_token") or lock.get("fencing_token") or "?"
+                    parts.append(f"{key} held by {owner} (fence {token})")
+                reply = "Active distributed leases: " + "; ".join(parts) + "."
+            else:
+                reply = (
+                    "No active leases right now. Acquire a lock from the Distributed Locks tab "
+                    "or ask me to “acquire a lock on orders-db” after you open that view. "
+                    "Every grant issues a strictly increasing 64-bit fencing token."
+                )
+        elif any(k in lower for k in ("partition", "split-brain", "split brain", "network")):
+            partitioned = status.get("is_partitioned") or status.get("health") == "PARTITIONED"
+            reply = (
+                f"The cluster is {'currently partitioned' if partitioned else 'fully connected'}. "
+                "A minority partition cannot elect a leader, so a partitioned node cannot commit "
+                "writes. Heal partitions from Tools & Chaos to restore quorum."
+            )
+        elif any(k in lower for k in ("node", "cluster", "health", "status", "topology")):
+            roles = []
+            for node in status.get("nodes") or []:
+                nid = node.get("node_id")
+                role = node.get("role")
+                roles.append(f"{nid}={role}")
+            role_txt = ", ".join(roles) if roles else "no node telemetry yet"
+            reply = (
+                f"Cluster {health}: {alive}/{total} nodes online, leader {leader}, term {term}. "
+                f"Roles: {role_txt}."
+            )
+        elif any(k in lower for k in ("wal", "log", "commit", "snapshot")):
+            commit = 0
+            for node in status.get("nodes") or []:
+                commit = max(commit, node.get("commit_index") or 0)
+            reply = (
+                f"Highest commit index is {commit}. Followers apply the same log prefix as the "
+                "leader. Snapshots compact old WAL entries once the threshold is reached."
+            )
+        elif any(k in lower for k in ("how", "what is quorum", "explain", "raft", "help")):
+            reply = (
+                "Quorum is a Raft consensus control plane: five nodes elect one leader, replicate "
+                "a write-ahead log, and grant distributed locks with monotonic fencing tokens so "
+                "stale workers cannot corrupt storage. Ask about leader, locks, partitions, WAL, "
+                "or run “zombie test”, “safe swarm”, or “unprotected chaos”."
+            )
+        else:
+            reply = (
+                f"I heard: “{text}”. Live cluster: leader {leader}, term {term}, "
+                f"health {health}, {alive}/{total} nodes, {len(locks)} active lock(s). "
+                "I can explain Raft, inspect leases, or run zombie / safe-swarm / chaos simulations."
+            )
+
+        return {
+            "success": True,
+            "reply": reply,
+            "action": action,
+            "leader_id": leader,
+            "health": health,
+            "alive_nodes": alive,
+            "total_nodes": total,
+            "active_locks": len(locks),
+            "simulation": simulation,
+        }

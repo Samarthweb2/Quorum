@@ -1,14 +1,36 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import SunburstLogo from './SunburstLogo';
-import { ArrowLeft, Check, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 
-export default function SignInPage({ onBackToHome, onCompleteAuth }) {
-  const [step, setStep] = useState('email'); // 'email' | 'otp'
+function readAuthError(data, fallback = 'Authentication failed.') {
+  if (!data) return fallback;
+  if (typeof data.detail === 'string') return data.detail;
+  if (data.detail && typeof data.detail === 'object' && data.detail.detail) return data.detail.detail;
+  return data.message || fallback;
+}
+
+export default function SignInPage({ onBackToHome, onCompleteAuth, initialMode = 'signin' }) {
+  const [mode, setMode] = useState(initialMode === 'signup' ? 'signup' : 'signin');
+  const [step, setStep] = useState('form'); // form | otp | forgot
   const [email, setEmail] = useState('');
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpPurpose, setOtpPurpose] = useState('signup');
+  const [devOtp, setDevOtp] = useState('');
+  const [info, setInfo] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const [activeQuoteIndex, setActiveQuoteIndex] = useState(0);
   const [showOtherOptions, setShowOtherOptions] = useState(false);
-  const inputRefs = useRef([]);
+
+  useEffect(() => {
+    setMode(initialMode === 'signup' ? 'signup' : 'signin');
+    setStep('form');
+    setError('');
+    setInfo('');
+  }, [initialMode]);
 
   const quotes = [
     {
@@ -36,39 +58,174 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
     },
   ];
 
-  const handleEmailSubmit = (e) => {
-    e?.preventDefault();
-    if (!email.trim()) {
-      setEmail('sam@mobbin.design');
-    }
+  const finishAuth = (payload) => {
+    const user = payload?.user || {};
+    onCompleteAuth({
+      email: user.email || email,
+      name: user.name || name || (email || '').split('@')[0],
+      token: payload?.token,
+    });
+  };
+
+  const enterOtpStep = (data, purpose) => {
+    setOtpPurpose(purpose);
+    setOtp('');
+    setDevOtp(data.dev_otp || '');
+    setInfo(data.message || `We sent a 6-digit code to ${email.trim()}.`);
     setStep('otp');
-    setActiveQuoteIndex(1); // Switch quote on OTP step as shown in Screenshot 3
   };
 
-  const handleOtpChange = (index, value) => {
-    if (value.length > 1) {
-      value = value.slice(-1);
+  const handleSubmit = async (e) => {
+    e?.preventDefault();
+    setError('');
+    setInfo('');
+    if (!email.trim()) {
+      setError('Email is required.');
+      return;
     }
-    const newDigits = [...otpDigits];
-    newDigits[index] = value;
-    setOtpDigits(newDigits);
-
-    // Auto advance to next box
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
+    if (step === 'forgot') {
+      setBusy(true);
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim() }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(readAuthError(data));
+          return;
+        }
+        enterOtpStep(data, 'reset');
+      } catch (err) {
+        setError('Cannot reach the Quorum API. Start the backend on port 8000.');
+      } finally {
+        setBusy(false);
+      }
+      return;
     }
-
-    // Auto submit if all 6 digits entered
-    if (newDigits.every((d) => d !== '')) {
-      setTimeout(() => {
-        onCompleteAuth(email || 'sam@mobbin.design');
-      }, 300);
+    if (step === 'otp') {
+      if (!/^\d{6}$/.test(otp.trim())) {
+        setError('Enter the 6-digit code from your email.');
+        return;
+      }
+      if (otpPurpose === 'reset' && password.length < 8) {
+        setError('Choose a new password of at least 8 characters.');
+        return;
+      }
+      setBusy(true);
+      try {
+        const path = otpPurpose === 'reset' ? '/api/auth/reset-password' : '/api/auth/verify';
+        const body =
+          otpPurpose === 'reset'
+            ? { email: email.trim(), code: otp.trim(), password }
+            : { email: email.trim(), code: otp.trim() };
+        const res = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(readAuthError(data, 'Verification failed.'));
+          return;
+        }
+        finishAuth(data);
+      } catch (err) {
+        setError('Cannot reach the Quorum API. Start the backend on port 8000.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (!password) {
+      setError('Password is required.');
+      return;
+    }
+    if (mode === 'signup') {
+      if (password.length < 8) {
+        setError('Password must be at least 8 characters.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.');
+        return;
+      }
+    }
+    setBusy(true);
+    try {
+      const path = mode === 'signup' ? '/api/auth/signup' : '/api/auth/signin';
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          name: name.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.needs_verification || res.status === 403) {
+        enterOtpStep(data, mode === 'signup' ? 'signup' : 'signin');
+        if (!res.ok && res.status !== 403) {
+          setError(readAuthError(data));
+        }
+        return;
+      }
+      if (!res.ok) {
+        setError(readAuthError(data));
+        return;
+      }
+      finishAuth(data);
+    } catch (err) {
+      setError('Cannot reach the Quorum API. Start the backend on port 8000.');
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+  const handleResend = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      const res = await fetch('/api/auth/resend-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), purpose: otpPurpose === 'reset' ? 'reset' : 'signup' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(readAuthError(data, 'Could not resend code.'));
+        return;
+      }
+      setDevOtp(data.dev_otp || '');
+      setInfo(data.message || 'A new code is on its way.');
+    } catch (err) {
+      setError('Cannot reach the Quorum API. Start the backend on port 8000.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDemoSignIn = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      const res = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'sam@mobbin.design', password: 'quorum123' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(readAuthError(data, 'Demo sign-in failed.'));
+        return;
+      }
+      finishAuth(data);
+    } catch (err) {
+      setError('Cannot reach the Quorum API. Start the backend on port 8000.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -199,20 +356,130 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
             >
               Welcome to Quorum
             </h1>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '32px' }}>
-              Sign in or create an account
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
+              {step === 'otp'
+                ? `Enter the code sent to ${email || 'your email'}`
+                : step === 'forgot'
+                  ? 'We will email a reset code to your address'
+                  : mode === 'signup'
+                    ? 'Create an account to launch your cluster'
+                    : 'Sign in to your control plane'}
             </p>
 
-            {/* STEP 1: Email Form */}
-            {step === 'email' ? (
-              <form onSubmit={handleEmailSubmit}>
-                <div style={{ marginBottom: '16px' }}>
+            {step === 'form' && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '6px',
+                padding: '4px',
+                borderRadius: '10px',
+                backgroundColor: 'var(--bg-subtle)',
+                marginBottom: '20px',
+              }}
+            >
+              {['signin', 'signup'].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setMode(m);
+                    setError('');
+                    setInfo('');
+                    setActiveQuoteIndex(m === 'signup' ? 1 : 0);
+                  }}
+                  style={{
+                    padding: '9px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    backgroundColor: mode === m ? 'var(--bg-card)' : 'transparent',
+                    color: 'var(--text-primary)',
+                    boxShadow: mode === m ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  {m === 'signin' ? 'Sign in' : 'Sign up'}
+                </button>
+              ))}
+            </div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+              {step === 'otp' && (
+                <>
+                  {info && (
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px', textAlign: 'left' }}>
+                      {info}
+                    </p>
+                  )}
+                  {devOtp && (
+                    <div
+                      style={{
+                        marginBottom: '12px',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(5, 150, 105, 0.08)',
+                        color: '#059669',
+                        fontSize: '13px',
+                        textAlign: 'left',
+                      }}
+                    >
+                      Local mode (SMTP not set). Code: <strong style={{ letterSpacing: '0.2em' }}>{devOtp}</strong>
+                    </div>
+                  )}
+                  <div style={{ marginBottom: '12px' }}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="6-digit code"
+                      autoFocus
+                      style={{
+                        width: '100%',
+                        padding: '13px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-subtle)',
+                        fontSize: '18px',
+                        letterSpacing: '0.28em',
+                        textAlign: 'center',
+                        color: 'var(--text-primary)',
+                        backgroundColor: 'var(--bg-input)',
+                      }}
+                    />
+                  </div>
+                  {otpPurpose === 'reset' && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="New password (min 8 chars)"
+                        autoComplete="new-password"
+                        style={{
+                          width: '100%',
+                          padding: '13px 16px',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border-subtle)',
+                          fontSize: '14px',
+                          color: 'var(--text-primary)',
+                          backgroundColor: 'var(--bg-input)',
+                        }}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {(step === 'form' || step === 'forgot') && mode === 'signup' && step === 'form' && (
+                <div style={{ marginBottom: '12px' }}>
                   <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter email address"
-                    autoFocus
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Full name"
+                    autoComplete="name"
                     style={{
                       width: '100%',
                       padding: '13px 16px',
@@ -221,171 +488,229 @@ export default function SignInPage({ onBackToHome, onCompleteAuth }) {
                       fontSize: '14px',
                       color: 'var(--text-primary)',
                       backgroundColor: 'var(--bg-input)',
-                      transition: 'border-color 0.2s',
                     }}
-                    onFocus={(e) => (e.target.style.borderColor = 'var(--btn-black)')}
-                    onBlur={(e) => (e.target.style.borderColor = 'var(--border-subtle)')}
                   />
                 </div>
-
-                <button
-                  type="submit"
-                  className="midday-btn-black"
+              )}
+              {step !== 'otp' && (
+              <div style={{ marginBottom: '12px' }}>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter email address"
+                  autoComplete="email"
+                  autoFocus
                   style={{
                     width: '100%',
+                    padding: '13px 16px',
                     borderRadius: '8px',
-                    padding: '13px',
+                    border: '1px solid var(--border-subtle)',
                     fontSize: '14px',
-                    marginBottom: '24px',
+                    color: 'var(--text-primary)',
+                    backgroundColor: 'var(--bg-input)',
                   }}
-                >
-                  Continue
-                </button>
+                />
+              </div>
+              )}
+              {step === 'form' && (
+              <div style={{ marginBottom: '12px' }}>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={mode === 'signup' ? 'Create a password (min 8 chars)' : 'Password'}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  style={{
+                    width: '100%',
+                    padding: '13px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-subtle)',
+                    fontSize: '14px',
+                    color: 'var(--text-primary)',
+                    backgroundColor: 'var(--bg-input)',
+                  }}
+                />
+              </div>
+              )}
+              {step === 'form' && mode === 'signup' && (
+                <div style={{ marginBottom: '12px' }}>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm password"
+                    autoComplete="new-password"
+                    style={{
+                      width: '100%',
+                      padding: '13px 16px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-subtle)',
+                      fontSize: '14px',
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-input)',
+                    }}
+                  />
+                </div>
+              )}
 
+              {error && (
                 <div
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '16px',
-                    color: 'var(--text-tertiary)',
-                    fontSize: '13px',
-                    margin: '20px 0',
-                  }}
-                >
-                  <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-subtle)' }} />
-                  <span>or</span>
-                  <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-subtle)' }} />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowOtherOptions(!showOtherOptions)}
-                  style={{
-                    width: '100%',
-                    padding: '13px',
+                    marginBottom: '12px',
+                    padding: '10px 12px',
                     borderRadius: '8px',
-                    backgroundColor: 'var(--btn-black)',
-                    color: 'var(--btn-black-text)',
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    transition: 'background-color 0.2s',
+                    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+                    color: '#dc2626',
+                    fontSize: '13px',
+                    textAlign: 'left',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--btn-black-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--btn-black)')}
                 >
-                  Show other options
-                </button>
-
-                {/* Expanded options (SSO / Quick Demo Bypass) */}
-                {showOtherOptions && (
-                  <div
-                    style={{
-                      marginTop: '16px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
-                      animation: 'fadeIn 0.2s ease',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => onCompleteAuth('sam@mobbin.design')}
-                      style={{
-                        padding: '11px',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: '8px',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: 'var(--text-primary)',
-                        backgroundColor: 'var(--bg-subtle)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        transition: 'background-color 0.15s',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-warm)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-subtle)')}
-                    >
-                      <Sparkles size={14} color="#059669" />
-                      <span>One-Click Demo Bypass (Sign in as Sam)</span>
-                    </button>
-                  </div>
-                )}
-              </form>
-            ) : (
-              /* STEP 2: 6-Digit OTP Verification Screen (matching Screenshot 3) */
-              <div>
-                <div className="otp-box-group">
-                  {otpDigits.map((digit, i) => (
-                    <input
-                      key={i}
-                      ref={(el) => (inputRefs.current[i] = el)}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleOtpChange(i, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(i, e)}
-                      autoFocus={i === 0}
-                      className="otp-box"
-                    />
-                  ))}
+                  {error}
                 </div>
+              )}
 
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
-                  Didn't receive the email?{' '}
-                  <span
+              <button
+                type="submit"
+                className="midday-btn-black"
+                disabled={busy}
+                style={{
+                  width: '100%',
+                  borderRadius: '8px',
+                  padding: '13px',
+                  fontSize: '14px',
+                  marginBottom: '16px',
+                  opacity: busy ? 0.7 : 1,
+                }}
+              >
+                {busy
+                  ? 'Working…'
+                  : step === 'otp' && otpPurpose === 'reset'
+                    ? 'Update password'
+                    : step === 'otp'
+                      ? 'Verify email'
+                      : step === 'forgot'
+                        ? 'Send reset code'
+                        : mode === 'signup'
+                          ? 'Create account'
+                          : 'Sign in'}
+              </button>
+
+              {step === 'otp' && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <button
+                    type="button"
                     onClick={() => {
-                      setOtpDigits(['2', '6', '5', '7', '5', '0']);
-                      setTimeout(() => onCompleteAuth(email || 'sam@mobbin.design'), 400);
+                      setStep('form');
+                      setOtp('');
+                      setError('');
+                      setDevOtp('');
                     }}
-                    style={{
-                      color: 'var(--text-primary)',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                      fontWeight: 500,
-                    }}
+                    style={{ fontSize: '13px', color: 'var(--text-secondary)' }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={busy}
+                    style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 600 }}
                   >
                     Resend code
-                  </span>
+                  </button>
                 </div>
+              )}
 
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '16px',
-                    color: 'var(--text-tertiary)',
-                    fontSize: '13px',
-                    margin: '20px 0',
-                  }}
-                >
-                  <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-subtle)' }} />
-                  <span>or</span>
-                  <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-subtle)' }} />
-                </div>
+              {step === 'form' && mode === 'signin' && (
+                <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '12px' }}>
+                  Demo account: sam@mobbin.design / quorum123
+                  {' · '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('forgot');
+                      setError('');
+                      setInfo('');
+                    }}
+                    style={{ textDecoration: 'underline', color: 'var(--text-secondary)' }}
+                  >
+                    Forgot password
+                  </button>
+                </p>
+              )}
 
+              {step === 'forgot' && (
                 <button
                   type="button"
-                  onClick={() => onCompleteAuth(email || 'sam@mobbin.design')}
-                  style={{
-                    width: '100%',
-                    padding: '13px',
-                    borderRadius: '8px',
-                    backgroundColor: 'var(--btn-black)',
-                    color: 'var(--btn-black-text)',
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    transition: 'background-color 0.2s',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--btn-black-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--btn-black)')}
+                  onClick={() => setStep('form')}
+                  style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}
                 >
-                  Show other options
+                  Back to sign in
                 </button>
+              )}
+
+              {step === 'form' && (
+              <>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  color: 'var(--text-tertiary)',
+                  fontSize: '13px',
+                  margin: '12px 0',
+                }}
+              >
+                <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-subtle)' }} />
+                <span>or</span>
+                <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-subtle)' }} />
               </div>
-            )}
+
+              <button
+                type="button"
+                onClick={() => setShowOtherOptions(!showOtherOptions)}
+                style={{
+                  width: '100%',
+                  padding: '13px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--btn-black)',
+                  color: 'var(--btn-black-text)',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                Show other options
+              </button>
+
+              {showOtherOptions && (
+                <div style={{ marginTop: '16px', animation: 'fadeIn 0.2s ease' }}>
+                  <button
+                    type="button"
+                    onClick={handleDemoSignIn}
+                    disabled={busy}
+                    style={{
+                      width: '100%',
+                      padding: '11px',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-subtle)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <Sparkles size={14} color="#059669" />
+                    <span>One-Click Demo (Sam / quorum123)</span>
+                  </button>
+                </div>
+              )}
+              </>
+              )}
+            </form>
 
             {/* Footer Terms */}
             <div style={{ marginTop: '48px', fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>

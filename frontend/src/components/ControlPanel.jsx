@@ -56,6 +56,8 @@ export default function ControlPanel({
 }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [promptText, setPromptText] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatBusy, setChatBusy] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -134,13 +136,18 @@ export default function ControlPanel({
   const totalProposals = status?.total_proposals || 0;
   const successfulProposals = status?.successful_proposals || 0;
 
-  const handlePromptSubmit = (e) => {
+  const handlePromptSubmit = async (e) => {
     e?.preventDefault();
-    if (!promptText.trim()) return;
-    const lower = promptText.toLowerCase();
-    if (lower.includes('zombie') || lower.includes('test')) {
+    const question = promptText.trim();
+    if (!question || chatBusy) return;
+    const lower = question.toLowerCase();
+    setPromptText('');
+    setChatMessages((prev) => [...prev, { role: 'user', text: question }]);
+    setChatBusy(true);
+
+    if (lower.includes('zombie')) {
+      onSimulateZombie?.();
       setActiveTab('terminal');
-      onSimulateZombie();
     } else if (lower.includes('lock') || lower.includes('lease')) {
       setActiveTab('locks');
     } else if (lower.includes('node') || lower.includes('topology') || lower.includes('partition')) {
@@ -152,7 +159,30 @@ export default function ControlPanel({
     } else if (lower.includes('log') || lower.includes('wal')) {
       setActiveTab('logs');
     }
-    setPromptText('');
+
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: question }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const reply =
+        data.reply ||
+        data.detail ||
+        'The AI coordinator is starting up. Try again in a moment.';
+      setChatMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
+    } catch (err) {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: `I could not reach the cluster API, but I still received “${question}”. Start the backend on port 8000 so I can answer from live Raft state.`,
+        },
+      ]);
+    } finally {
+      setChatBusy(false);
+    }
   };
 
   const tabItems = [
@@ -742,7 +772,7 @@ export default function ControlPanel({
               )}
             </div>
 
-            <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--btn-black)', color: 'var(--btn-black-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600 }}>S</div>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--btn-black)', color: 'var(--btn-black-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600 }}>{(userName || 'O')[0].toUpperCase()}</div>
           </div>
         </header>
 
@@ -760,8 +790,60 @@ export default function ControlPanel({
               </div>
 
               <div style={{ maxWidth: '780px', width: '100%', margin: '0 auto' }}>
+                {chatMessages.length > 0 && (
+                  <div
+                    style={{
+                      maxHeight: '280px',
+                      overflowY: 'auto',
+                      marginBottom: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {chatMessages.map((msg, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                          maxWidth: '92%',
+                          padding: '10px 14px',
+                          borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                          backgroundColor: msg.role === 'user' ? 'var(--btn-black)' : 'var(--bg-card)',
+                          color: msg.role === 'user' ? 'var(--btn-black-text)' : 'var(--text-primary)',
+                          border: msg.role === 'user' ? 'none' : '1px solid var(--border-subtle)',
+                          fontSize: '13px',
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {msg.role === 'assistant' && (
+                          <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px', color: 'var(--accent-emerald)' }}>
+                            Quorum AI
+                          </div>
+                        )}
+                        {msg.text}
+                      </div>
+                    ))}
+                    {chatBusy && (
+                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Quorum AI is thinking…</div>
+                    )}
+                  </div>
+                )}
                 <form onSubmit={handlePromptSubmit} className="midday-command-bar" style={{ position: 'relative' }}>
-                  <textarea rows={2} value={promptText} onChange={(e) => setPromptText(e.target.value)} placeholder="How can I help you today?" style={{ width: '100%', border: 'none', background: 'transparent', resize: 'none', fontSize: '14px', color: 'var(--text-primary)', outline: 'none' }} />
+                  <textarea
+                    rows={2}
+                    value={promptText}
+                    onChange={(e) => setPromptText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handlePromptSubmit(e);
+                      }
+                    }}
+                    placeholder="Ask anything — cluster health, locks, Raft, or run a zombie test"
+                    style={{ width: '100%', border: 'none', background: 'transparent', resize: 'none', fontSize: '14px', color: 'var(--text-primary)', outline: 'none' }}
+                  />
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-tertiary)' }}>
                       <button type="button" title="Add resource" style={{ color: 'inherit' }}><Plus size={16} /></button>
@@ -769,7 +851,7 @@ export default function ControlPanel({
                       <button type="button" title="Target node" style={{ color: 'inherit' }}><AtSign size={15} /></button>
                       <button type="button" title="Client link" style={{ color: 'inherit' }}><Link2 size={16} /></button>
                     </div>
-                    <button type="submit" style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--btn-black)', color: 'var(--btn-black-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'opacity 0.15s' }}><ArrowUp size={15} /></button>
+                    <button type="submit" disabled={chatBusy} style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--btn-black)', color: 'var(--btn-black-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'opacity 0.15s', opacity: chatBusy ? 0.6 : 1 }}><ArrowUp size={15} /></button>
                   </div>
                 </form>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '8px' }}>

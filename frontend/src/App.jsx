@@ -6,7 +6,10 @@ import ControlPanel from './components/ControlPanel';
 
 export default function App() {
   const [view, setView] = useState('landing'); // 'landing' | 'signin' | 'team_select' | 'control_panel'
-  const [userEmail, setUserEmail] = useState('sam@mobbin.design');
+  const [authMode, setAuthMode] = useState('signin');
+  const [userEmail, setUserEmail] = useState('');
+  const [userName, setUserName] = useState('');
+  const [authToken, setAuthToken] = useState('');
   const [selectedTeam, setSelectedTeam] = useState({ id: 'slmobbin', name: 'SLMobbin' });
   const [status, setStatus] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
@@ -29,6 +32,36 @@ export default function App() {
       // ignore
     }
   }, [theme]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('quorum-session');
+      if (!raw) return;
+      const session = JSON.parse(raw);
+      if (session?.token && session?.email) {
+        setAuthToken(session.token);
+        setUserEmail(session.email);
+        setUserName(session.name || session.email.split('@')[0]);
+        fetch('/api/auth/me', { headers: { Authorization: `Bearer ${session.token}` } })
+          .then((res) => {
+            if (!res.ok) throw new Error('expired');
+            return res.json();
+          })
+          .then((data) => {
+            const user = data.user || session;
+            setUserEmail(user.email || session.email);
+            setUserName(user.name || session.name);
+            setView('team_select');
+          })
+          .catch(() => {
+            localStorage.removeItem('quorum-session');
+            setAuthToken('');
+          });
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
@@ -206,8 +239,18 @@ export default function App() {
       {/* 1. LANDING PAGE (Screenshot 1 & Last Page Footer) */}
       {view === 'landing' && (
         <LandingPage
-          onSignIn={() => setView('signin')}
-          onLaunchCluster={() => setView('control_panel')}
+          onSignIn={() => {
+            setAuthMode('signin');
+            setView('signin');
+          }}
+          onSignUp={() => {
+            setAuthMode('signup');
+            setView('signin');
+          }}
+          onLaunchCluster={() => {
+            setAuthMode('signup');
+            setView('signin');
+          }}
           status={status}
           theme={theme}
           onToggleTheme={toggleTheme}
@@ -220,8 +263,19 @@ export default function App() {
           onBackToHome={() => setView('landing')}
           theme={theme}
           onToggleTheme={toggleTheme}
-          onCompleteAuth={(email) => {
+          initialMode={authMode}
+          onCompleteAuth={(session) => {
+            const email = session?.email || session;
+            const name = session?.name || String(email).split('@')[0];
+            const token = session?.token || '';
             setUserEmail(email);
+            setUserName(name);
+            setAuthToken(token);
+            try {
+              localStorage.setItem('quorum-session', JSON.stringify({ email, name, token }));
+            } catch (e) {
+              // ignore
+            }
             setView('team_select');
           }}
         />
@@ -237,7 +291,23 @@ export default function App() {
             setSelectedTeam(team);
             setView('control_panel');
           }}
-          onSignOut={() => setView('landing')}
+          onSignOut={() => {
+            if (authToken) {
+              fetch('/api/auth/signout', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${authToken}` },
+              }).catch(() => {});
+            }
+            try {
+              localStorage.removeItem('quorum-session');
+            } catch (e) {
+              // ignore
+            }
+            setAuthToken('');
+            setUserEmail('');
+            setUserName('');
+            setView('landing');
+          }}
         />
       )}
 
@@ -248,8 +318,24 @@ export default function App() {
           wsConnected={wsConnected}
           theme={theme}
           onToggleTheme={toggleTheme}
-          userName={userEmail.split('@')[0] === 'sam' ? 'Sam' : 'Sam'}
-          onSignOut={() => setView('landing')}
+          userName={userName || (userEmail ? userEmail.split('@')[0] : 'Operator')}
+          onSignOut={() => {
+            if (authToken) {
+              fetch('/api/auth/signout', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${authToken}` },
+              }).catch(() => {});
+            }
+            try {
+              localStorage.removeItem('quorum-session');
+            } catch (e) {
+              // ignore
+            }
+            setAuthToken('');
+            setUserEmail('');
+            setUserName('');
+            setView('landing');
+          }}
           onSimulateZombie={handleSimulateZombie}
           onAcquireLock={handleAcquireLock}
           onReleaseLock={handleReleaseLock}

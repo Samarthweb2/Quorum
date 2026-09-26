@@ -18,6 +18,11 @@ env/
 venv/
 ENV/
 
+# Secrets
+.env
+.env.*
+!.env.example
+
 # Testing & Coverage
 .pytest_cache/
 .coverage
@@ -28,7 +33,10 @@ data/
 *.wal
 state.json
 state.json.tmp
+users.json
+users.json.tmp
 
 # OS files
 .DS_Store
 Thumbs.db
+

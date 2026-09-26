@@ -20,7 +20,7 @@ import {
   Moon,
 } from 'lucide-react';
 
-export default function LandingPage({ onSignIn, onLaunchCluster, status, theme = 'light', onToggleTheme }) {
+export default function LandingPage({ onSignIn, onSignUp, onLaunchCluster, status, theme = 'light', onToggleTheme }) {
   const [activeFeature, setActiveFeature] = useState(0);
 
   return (
@@ -73,6 +73,14 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             Sign in
+          </button>
+
+          <button
+            onClick={onSignUp}
+            className="midday-btn-black"
+            style={{ padding: '8px 14px', fontSize: '13px', borderRadius: '8px' }}
+          >
+            Sign up
           </button>
 
           <button
@@ -151,7 +159,7 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
         {/* CTA Button */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
           <button
-            onClick={onLaunchCluster}
+            onClick={onSignUp || onLaunchCluster}
             className="midday-btn-black"
             style={{ padding: '13px 32px', fontSize: '15px' }}
           >
@@ -223,7 +231,7 @@ export default function LandingPage({ onSignIn, onLaunchCluster, status, theme =
 
         {/* Clean Dashboard Preview Window matching Screenshot 1 (no thick bezel/box) */}
         <div
-          onClick={onLaunchCluster}
+          onClick={onSignUp || onLaunchCluster}
           style={{
             maxWidth: '1100px',
             margin: '0 auto',
