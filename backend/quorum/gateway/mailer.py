@@ -37,10 +37,14 @@ def load_dotenv(path: Optional[Path] = None) -> None:
     candidates = []
     if path:
         candidates.append(path)
+    here = Path(__file__).resolve()
     candidates.append(Path.cwd() / ".env")
     try:
-        repo_root = Path(__file__).resolve().parents[3]
-        candidates.append(repo_root / ".env")
+        candidates.append(here.parents[2] / ".env")  # backend/.env
+    except IndexError:
+        pass
+    try:
+        candidates.append(here.parents[3] / ".env")  # repo root .env
     except IndexError:
         pass
     seen = set()
@@ -50,10 +54,12 @@ def load_dotenv(path: Optional[Path] = None) -> None:
             continue
         seen.add(resolved)
         try:
-            for raw in candidate.read_text(encoding="utf-8").splitlines():
+            for raw in candidate.read_text(encoding="utf-8-sig").splitlines():
                 line = raw.strip()
                 if not line or line.startswith("#") or "=" not in line:
                     continue
+                if line.lower().startswith("export "):
+                    line = line[7:].strip()
                 key, _, value = line.partition("=")
                 key = key.strip()
                 value = value.strip().strip('"').strip("'")
@@ -64,6 +70,16 @@ def load_dotenv(path: Optional[Path] = None) -> None:
 
 
 load_dotenv()
+
+
+def _parse_smtp_port(raw: Optional[str]) -> int:
+    try:
+        port = int((raw or "587").strip() or "587")
+    except ValueError:
+        return 587
+    if port < 1 or port > 65535:
+        return 587
+    return port
 
 
 @dataclass
@@ -80,15 +96,30 @@ class SmtpConfig:
     def enabled(self) -> bool:
         return bool(self.host and self.username and self.password)
 
+    def missing_env_vars(self) -> list[str]:
+        missing: list[str] = []
+        if not self.host:
+            missing.append("SMTP_HOST")
+        if not self.username:
+            missing.append("SMTP_USER")
+        if not self.password:
+            missing.append("SMTP_PASSWORD")
+        return missing
+
     @classmethod
     def from_env(cls) -> "SmtpConfig":
         host = (os.environ.get("SMTP_HOST") or "").strip()
-        port = int(os.environ.get("SMTP_PORT") or "587")
+        port = _parse_smtp_port(os.environ.get("SMTP_PORT"))
         username = (os.environ.get("SMTP_USER") or os.environ.get("SMTP_USERNAME") or "").strip()
-        password = (os.environ.get("SMTP_PASSWORD") or os.environ.get("SMTP_PASS") or "").strip()
+        password = "".join((os.environ.get("SMTP_PASSWORD") or os.environ.get("SMTP_PASS") or "").split())
         sender = (os.environ.get("SMTP_FROM") or os.environ.get("SMTP_SENDER") or username).strip()
-        starttls = (os.environ.get("SMTP_STARTTLS") or "true").strip().lower() in ("1", "true", "yes")
         use_ssl = (os.environ.get("SMTP_SSL") or "").strip().lower() in ("1", "true", "yes") or port == 465
+        starttls_raw = (os.environ.get("SMTP_STARTTLS") or "").strip().lower()
+        if starttls_raw:
+            starttls = starttls_raw in ("1", "true", "yes")
+        else:
+            # Submission port 587 expects STARTTLS; implicit TLS (465) does not.
+            starttls = not use_ssl
         return cls(
             host=host,
             port=port,
@@ -158,9 +189,14 @@ def send_otp_email(to_email: str, code: str, purpose: str = "signup") -> Tuple[b
     if not cfg.enabled:
         logger.warning("SMTP is not configured. OTP for %s (%s) is %s", to_email, purpose, code)
         if smtp_required():
+            names = ", ".join(cfg.missing_env_vars()) or "SMTP_HOST, SMTP_USER, SMTP_PASSWORD"
             return (
                 False,
-                "Email delivery is not configured on this server. Set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD.",
+                (
+                    "Email delivery is not configured on this server. "
+                    f"Missing environment variables: {names}. "
+                    "Set them in a local .env file or in Render Environment Variables."
+                ),
                 "none",
             )
         return True, None, "console"
