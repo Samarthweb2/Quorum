@@ -13,6 +13,10 @@ services:
         value: 20.11.0
       - key: RENDER
         value: "true"
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -23,3 +27,7 @@ services:
         sync: false
       - key: SMTP_FROM
         sync: false
+      - key: QUORUM_USERS_PATH
+        value: "/opt/render/project/src/.quorum/users.json"
+      - key: QUORUM_AUTH_DEV
+        value: "false"

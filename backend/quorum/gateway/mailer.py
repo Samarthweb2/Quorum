@@ -1,4 +1,10 @@
-"""SMTP delivery for authentication emails (OTP verification and password reset)."""
+"""Email delivery for authentication OTPs (verification and password reset).
+
+Supports three backends, tried in this order:
+1. SendGrid Web API (SENDGRID_API_KEY set) — HTTPS/443, never blocked by firewalls.
+2. Raw SMTP (SMTP_HOST/SMTP_USER/SMTP_PASSWORD set) — direct TCP to mail server.
+3. Console/dev fallback — OTP printed to logs, returned in the API response.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +16,8 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Optional, Tuple
+
+import httpx
 
 logger = logging.getLogger("quorum.gateway.mailer")
 
@@ -131,6 +139,72 @@ class SmtpConfig:
         )
 
 
+@dataclass
+class SendGridConfig:
+    api_key: str
+    sender: str
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.api_key and self.sender)
+
+    def missing_env_vars(self) -> list[str]:
+        missing: list[str] = []
+        if not self.api_key:
+            missing.append("SENDGRID_API_KEY")
+        if not self.sender:
+            missing.append("SENDGRID_FROM")
+        return missing
+
+    @classmethod
+    def from_env(cls) -> "SendGridConfig":
+        api_key = (os.environ.get("SENDGRID_API_KEY") or "").strip()
+        sender = (
+            os.environ.get("SENDGRID_FROM")
+            or os.environ.get("SMTP_FROM")
+            or os.environ.get("SMTP_SENDER")
+            or os.environ.get("SMTP_USER")
+            or ""
+        ).strip()
+        return cls(api_key=api_key, sender=sender)
+
+
+def _plain_text_body(code: str, purpose: str) -> str:
+    copy = PURPOSE_COPY.get(purpose, PURPOSE_COPY["signup"])
+    return (
+        f"{copy['headline']}\n\n{copy['body']}\n\n"
+        f"Your code: {code}\n\n"
+        "If you did not request this, ignore this email."
+    )
+
+
+def _delivery_configured() -> Tuple[bool, Optional[str]]:
+    """Returns (is_configured, error_message_when_not).
+
+    On RENDER/production, either SendGrid or SMTP must be fully configured.
+    """
+    sg = SendGridConfig.from_env()
+    smtp = SmtpConfig.from_env()
+    if sg.enabled or smtp.enabled:
+        return True, None
+    required = smtp_required()
+    if not required:
+        return True, None
+    missing_parts: list[str] = []
+    sg_missing = sg.missing_env_vars()
+    if sg_missing:
+        missing_parts.append(f"SendGrid (needs {', '.join(sg_missing)})")
+    smtp_missing = smtp.missing_env_vars()
+    if smtp_missing:
+        missing_parts.append(f"SMTP (needs {', '.join(smtp_missing)})")
+    msg = (
+        "Email delivery is not configured on this server. "
+        "Configure either " + " or ".join(missing_parts) + ". "
+        "Set them in a local .env file or in Render Environment Variables."
+    )
+    return False, msg
+
+
 def smtp_required() -> bool:
     """Production hosts must send real mail; local/dev can fall back to console OTP."""
     flag = (os.environ.get("QUORUM_REQUIRE_SMTP") or "").strip().lower()
@@ -179,35 +253,57 @@ def _html_email(code: str, purpose: str) -> str:
 """
 
 
-def send_otp_email(to_email: str, code: str, purpose: str = "signup") -> Tuple[bool, Optional[str], str]:
-    """
-    Send a 6-digit OTP.
-    Returns (ok, error_message, delivery) where delivery is 'smtp' or 'console'.
-    """
-    cfg = SmtpConfig.from_env()
+def _send_via_sendgrid(to_email: str, code: str, purpose: str, cfg: SendGridConfig) -> Tuple[bool, Optional[str]]:
     copy = PURPOSE_COPY.get(purpose, PURPOSE_COPY["signup"])
-    if not cfg.enabled:
-        logger.warning("SMTP is not configured. OTP for %s (%s) is %s", to_email, purpose, code)
-        if smtp_required():
-            names = ", ".join(cfg.missing_env_vars()) or "SMTP_HOST, SMTP_USER, SMTP_PASSWORD"
-            return (
-                False,
-                (
-                    "Email delivery is not configured on this server. "
-                    f"Missing environment variables: {names}. "
-                    "Set them in a local .env file or in Render Environment Variables."
-                ),
-                "none",
+    payload = {
+        "personalizations": [
+            {
+                "to": [{"email": to_email}],
+                "subject": copy["subject"],
+            }
+        ],
+        "from": {"email": cfg.sender},
+        "content": [
+            {"type": "text/plain", "value": _plain_text_body(code, purpose)},
+            {"type": "text/html", "value": _html_email(code, purpose)},
+        ],
+    }
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            r = client.post(
+                "https://api.sendgrid.com/v3/mail/send",
+                headers={
+                    "Authorization": f"Bearer {cfg.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
             )
-        return True, None, "console"
+            if r.status_code < 300:
+                return True, None
+            detail = r.text
+            try:
+                data = r.json()
+                if isinstance(data, dict) and "errors" in data:
+                    first_err = data["errors"][0] if data["errors"] else {}
+                    detail = first_err.get("message") or first_err.get("field") or detail
+            except Exception:
+                pass
+            return False, f"SendGrid API error ({r.status_code}): {detail}"
+    except httpx.HTTPError as exc:
+        logger.exception("SendGrid HTTP transport error sending to %s", to_email)
+        return False, f"SendGrid transport error: {exc}"
+    except Exception as exc:
+        logger.exception("Unexpected SendGrid error sending to %s", to_email)
+        return False, f"Could not send email via SendGrid: {exc}"
 
+
+def _send_via_smtp(to_email: str, code: str, purpose: str, cfg: SmtpConfig) -> Tuple[bool, Optional[str]]:
+    copy = PURPOSE_COPY.get(purpose, PURPOSE_COPY["signup"])
     msg = EmailMessage()
     msg["Subject"] = copy["subject"]
     msg["From"] = cfg.sender
     msg["To"] = to_email
-    msg.set_content(
-        f"{copy['headline']}\n\n{copy['body']}\n\nYour code: {code}\n\nIf you did not request this, ignore this email."
-    )
+    msg.set_content(_plain_text_body(code, purpose))
     msg.add_alternative(_html_email(code, purpose), subtype="html")
 
     try:
@@ -224,8 +320,62 @@ def send_otp_email(to_email: str, code: str, purpose: str = "signup") -> Tuple[b
                     smtp.ehlo()
                 smtp.login(cfg.username, cfg.password)
                 smtp.send_message(msg)
-        logger.info("Sent %s OTP to %s via SMTP", purpose, to_email)
-        return True, None, "smtp"
+        return True, None
     except Exception as exc:
-        logger.exception("Failed to send OTP email to %s", to_email)
-        return False, f"Could not send email: {exc}", "none"
+        logger.exception("SMTP error sending OTP email to %s", to_email)
+        return False, f"Could not send email via SMTP: {exc}"
+
+
+def send_otp_email(to_email: str, code: str, purpose: str = "signup") -> Tuple[bool, Optional[str], str]:
+    """
+    Send a 6-digit OTP.
+
+    Tries, in order:
+      1. SendGrid HTTP API (SENDGRID_API_KEY set) — port 443, never blocked.
+      2. Raw SMTP (SMTP_HOST/SMTP_USER/SMTP_PASSWORD set).
+      3. Console/dev fallback — only allowed when !smtp_required().
+
+    Returns (ok, error_message, delivery) where delivery is 'sendgrid' | 'smtp' | 'console' | 'none'.
+    """
+    configured, config_err = _delivery_configured()
+    if not configured:
+        logger.warning("No email delivery configured. OTP for %s (%s) is %s", to_email, purpose, code)
+        return False, config_err, "none"
+
+    sg = SendGridConfig.from_env()
+    if sg.enabled:
+        ok, err = _send_via_sendgrid(to_email, code, purpose, sg)
+        if ok:
+            logger.info("Sent %s OTP to %s via SendGrid", purpose, to_email)
+            return True, None, "sendgrid"
+        smtp_cfg = SmtpConfig.from_env()
+        if smtp_cfg.enabled:
+            logger.warning("SendGrid failed, falling back to SMTP: %s", err)
+            ok2, err2 = _send_via_smtp(to_email, code, purpose, smtp_cfg)
+            if ok2:
+                logger.info("Sent %s OTP to %s via SMTP fallback", purpose, to_email)
+                return True, None, "smtp"
+            return False, f"{err} — SMTP fallback also failed: {err2}", "none"
+        return False, err, "none"
+
+    smtp_cfg = SmtpConfig.from_env()
+    if smtp_cfg.enabled:
+        ok, err = _send_via_smtp(to_email, code, purpose, smtp_cfg)
+        if ok:
+            logger.info("Sent %s OTP to %s via SMTP", purpose, to_email)
+            return True, None, "smtp"
+        return False, err, "none"
+
+    logger.warning("SMTP is not configured. OTP for %s (%s) is %s", to_email, purpose, code)
+    if smtp_required():
+        names = ", ".join(smtp_cfg.missing_env_vars()) or "SMTP_HOST, SMTP_USER, SMTP_PASSWORD"
+        return (
+            False,
+            (
+                "Email delivery is not configured on this server. "
+                f"Missing environment variables: {names}. "
+                "Set them in a local .env file or in Render Environment Variables."
+            ),
+            "none",
+        )
+    return True, None, "console"
