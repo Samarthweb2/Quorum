@@ -326,14 +326,47 @@ def _send_via_smtp(to_email: str, code: str, purpose: str, cfg: SmtpConfig) -> T
         return False, f"Could not send email via SMTP: {exc}"
 
 
+def _selected_backend() -> str:
+    """Return 'sendgrid' | 'smtp' | 'auto'.
+
+    When QUORUM_EMAIL_BACKEND is set, force that backend. Otherwise prefer
+    'sendgrid' if configured, else 'smtp' if configured, else 'auto'.
+    On RENDER=true we also refuse SMTP fallback by default — cloud providers
+    often block ports 587/465 for anti-spam.
+    """
+    force = (os.environ.get("QUORUM_EMAIL_BACKEND") or "").strip().lower()
+    if force in ("sendgrid", "smtp"):
+        return force
+    if SendGridConfig.from_env().enabled:
+        return "sendgrid"
+    if SmtpConfig.from_env().enabled:
+        return "smtp"
+    return "auto"
+
+
+def _allow_smtp_fallback() -> bool:
+    """By default, SMTP fallback is disabled on cloud hosts where 587/465 are blocked."""
+    flag = (os.environ.get("QUORUM_ALLOW_SMTP_FALLBACK") or "").strip().lower()
+    if flag in ("1", "true", "yes"):
+        return True
+    if flag in ("0", "false", "no"):
+        return False
+    return not (os.environ.get("RENDER") or os.environ.get("QUORUM_PRODUCTION") or os.environ.get("HEROKU"))
+
+
 def send_otp_email(to_email: str, code: str, purpose: str = "signup") -> Tuple[bool, Optional[str], str]:
     """
     Send a 6-digit OTP.
 
-    Tries, in order:
+    Default backend priority (configurable via QUORUM_EMAIL_BACKEND):
       1. SendGrid HTTP API (SENDGRID_API_KEY set) — port 443, never blocked.
       2. Raw SMTP (SMTP_HOST/SMTP_USER/SMTP_PASSWORD set).
       3. Console/dev fallback — only allowed when !smtp_required().
+
+    On RENDER=true, SMTP fallback is DISABLED by default because cloud providers
+    almost always block outbound ports 587/465 for anti-spam, which would
+    otherwise mask the real SendGrid error behind a generic "network unreachable".
+    Set QUORUM_ALLOW_SMTP_FALLBACK=true to re-enable it explicitly.
 
     Returns (ok, error_message, delivery) where delivery is 'sendgrid' | 'smtp' | 'console' | 'none'.
     """
@@ -342,23 +375,46 @@ def send_otp_email(to_email: str, code: str, purpose: str = "signup") -> Tuple[b
         logger.warning("No email delivery configured. OTP for %s (%s) is %s", to_email, purpose, code)
         return False, config_err, "none"
 
+    backend = _selected_backend()
     sg = SendGridConfig.from_env()
-    if sg.enabled:
+    smtp_cfg = SmtpConfig.from_env()
+    allow_smtp_fb = _allow_smtp_fallback()
+
+    if backend == "sendgrid" and sg.enabled:
         ok, err = _send_via_sendgrid(to_email, code, purpose, sg)
         if ok:
             logger.info("Sent %s OTP to %s via SendGrid", purpose, to_email)
             return True, None, "sendgrid"
-        smtp_cfg = SmtpConfig.from_env()
-        if smtp_cfg.enabled:
+        if smtp_cfg.enabled and allow_smtp_fb:
             logger.warning("SendGrid failed, falling back to SMTP: %s", err)
             ok2, err2 = _send_via_smtp(to_email, code, purpose, smtp_cfg)
             if ok2:
                 logger.info("Sent %s OTP to %s via SMTP fallback", purpose, to_email)
                 return True, None, "smtp"
-            return False, f"{err} — SMTP fallback also failed: {err2}", "none"
+            return False, f"SendGrid failed: {err} — SMTP fallback also failed: {err2}", "none"
+        return False, f"SendGrid failed: {err}", "none"
+
+    if backend == "smtp" and smtp_cfg.enabled:
+        ok, err = _send_via_smtp(to_email, code, purpose, smtp_cfg)
+        if ok:
+            logger.info("Sent %s OTP to %s via SMTP", purpose, to_email)
+            return True, None, "smtp"
         return False, err, "none"
 
-    smtp_cfg = SmtpConfig.from_env()
+    if sg.enabled:
+        ok, err = _send_via_sendgrid(to_email, code, purpose, sg)
+        if ok:
+            logger.info("Sent %s OTP to %s via SendGrid", purpose, to_email)
+            return True, None, "sendgrid"
+        if smtp_cfg.enabled and allow_smtp_fb:
+            logger.warning("SendGrid failed, falling back to SMTP: %s", err)
+            ok2, err2 = _send_via_smtp(to_email, code, purpose, smtp_cfg)
+            if ok2:
+                logger.info("Sent %s OTP to %s via SMTP fallback", purpose, to_email)
+                return True, None, "smtp"
+            return False, f"SendGrid failed: {err} — SMTP fallback also failed: {err2}", "none"
+        return False, f"SendGrid failed: {err}", "none"
+
     if smtp_cfg.enabled:
         ok, err = _send_via_smtp(to_email, code, purpose, smtp_cfg)
         if ok:
@@ -366,16 +422,19 @@ def send_otp_email(to_email: str, code: str, purpose: str = "signup") -> Tuple[b
             return True, None, "smtp"
         return False, err, "none"
 
-    logger.warning("SMTP is not configured. OTP for %s (%s) is %s", to_email, purpose, code)
+    logger.warning("No email backend configured. OTP for %s (%s) is %s", to_email, purpose, code)
     if smtp_required():
-        names = ", ".join(smtp_cfg.missing_env_vars()) or "SMTP_HOST, SMTP_USER, SMTP_PASSWORD"
-        return (
-            False,
-            (
-                "Email delivery is not configured on this server. "
-                f"Missing environment variables: {names}. "
-                "Set them in a local .env file or in Render Environment Variables."
-            ),
-            "none",
+        missing_parts: list[str] = []
+        sg_missing = sg.missing_env_vars()
+        if sg_missing:
+            missing_parts.append(f"SendGrid (needs {', '.join(sg_missing)})")
+        smtp_missing = smtp_cfg.missing_env_vars()
+        if smtp_missing:
+            missing_parts.append(f"SMTP (needs {', '.join(smtp_missing)})")
+        msg = (
+            "Email delivery is not configured on this server. "
+            "Configure either " + " or ".join(missing_parts) + ". "
+            "Set them in a local .env file or in Render Environment Variables."
         )
+        return False, msg, "none"
     return True, None, "console"

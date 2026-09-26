@@ -31,3 +31,7 @@ services:
         value: "/opt/render/project/src/.quorum/users.json"
       - key: QUORUM_AUTH_DEV
         value: "false"
+      - key: QUORUM_EMAIL_BACKEND
+        value: "sendgrid"
+      - key: QUORUM_ALLOW_SMTP_FALLBACK
+        value: "false"
